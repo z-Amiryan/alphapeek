@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["@cloudflare/workers-types"],
+    // No rootDir: the shared types are imported from ../../packages/shared via
+    // the path alias below, which lives outside src. Since this project is
+    // noEmit (typecheck only), a rootDir would just trigger TS6059 for no gain.
+    "noEmit": true,
+    "paths": {
+      "@alphapeek/shared": ["../../packages/shared/src/types.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

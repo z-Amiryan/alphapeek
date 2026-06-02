@@ -1,0 +1,25 @@
+name = "alphapeek-proxy"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# KV namespaces — replace the placeholder ids after running:
+#   npx wrangler kv namespace create CACHE
+#   npx wrangler kv namespace create RATELIMIT
+[[kv_namespaces]]
+binding = "CACHE"
+id = "REPLACE_ME"
+
+[[kv_namespaces]]
+binding = "RATELIMIT"
+id = "REPLACE_ME"
+
+[vars]
+# Caps total /v1/lookup requests per UTC day (counts every request, including KV
+# cache hits) — a request cap, i.e. an upper bound on, not a direct meter of,
+# CoinStats credit spend. Raise per DEPLOYMENT.md §10/§11.
+DAILY_CAP = "5000"
+COINSTATS_BASE_URL = "https://openapiv1.coinstats.app"
+
+# Secret (never commit) — set with:
+#   npx wrangler secret put COINSTATS_API_KEY

@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+.output/
+.wxt/
+*.tsbuildinfo
+
+# Env / secrets — NEVER commit
+.env
+.env.*
+!.env.example
+.dev.vars
+.wrangler/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local agent / tooling config (never commit)
+.claude/settings.local.json
+.claude/worktrees/
+*.local
+
+# Spurious npm lockfile — this repo uses pnpm
+package-lock.json
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Test / coverage
+coverage/

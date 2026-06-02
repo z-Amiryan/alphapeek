@@ -73,8 +73,3 @@ export function truncateAddress(addr: string): string {
   if (addr.length <= 11) return addr
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
-
-export function initial(symbol: string): string {
-  const first = symbol.trim()[0]
-  return (first ?? '?').toUpperCase()
-}

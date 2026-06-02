@@ -1,32 +1,25 @@
-// Wallet card (UX §3C). No PnL in v0.1 — extra credit cost, deliberate v0.2 call.
-// Footer links the block explorer (always correct) rather than a guessed CoinStats
-// per-address URL, which has no documented public format yet.
+// Wallet card (UX §3C) in the Terminal pattern. No PnL in v0.1 — extra credit
+// cost, deliberate v0.2 call. Footer links the block explorer (always correct)
+// rather than a guessed CoinStats per-address URL with no documented format.
 import type { WalletSummary } from '@alphapeek/shared'
 import { CHAIN_LABELS } from '@alphapeek/shared'
-import { Check, Copy, ExternalLink } from 'lucide-react'
 import { useState } from 'react'
 import { explorerAddressUrl, explorerName } from '@/lib/chain'
 import { formatShare, formatUsd, truncateAddress } from '@/lib/format'
-import { CoinIcon } from './CoinIcon'
+import { ArrowOut } from './icons'
+import { BTN } from './ui'
 
 type Props = {
   wallet: WalletSummary
 }
 
-const DIVIDER = 'my-3 border-t border-neutral-100 dark:border-surface-dark-100'
-
-// Allocation-bar segment colors — value-neutral hues (no green=good / red=bad connotation),
-// one per top holding, cycled. The uncovered remainder of the track reads as "other".
-const ALLOC_COLORS = [
-  'bg-indigo-500',
-  'bg-violet-500',
-  'bg-sky-500',
-  'bg-teal-500',
-  'bg-fuchsia-500',
-] as const
+// Allocation-bar segment ramp (largest → smallest holding); the uncovered track
+// remainder reads as "other". Index-mapped so JIT sees the literal class names.
+const SEG = ['bg-seg-1', 'bg-seg-2', 'bg-seg-3', 'bg-seg-4', 'bg-seg-5'] as const
 
 export function WalletView({ wallet }: Props) {
   const [copied, setCopied] = useState(false)
+  const has = wallet.holdings.length > 0
 
   const copy = async () => {
     try {
@@ -39,97 +32,98 @@ export function WalletView({ wallet }: Props) {
   }
 
   return (
-    <div className="px-4 py-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-sm text-neutral-900 dark:text-neutral-50">
-          {truncateAddress(wallet.address)}
+    <div>
+      <div className="flex items-center gap-2 border-b-[1.5px] border-line px-[13px] py-[10px]">
+        <span className="h-[13px] w-[13px] shrink-0 bg-acc" />
+        <span className="text-[13px] font-bold tracking-[0.04em]">WALLET</span>
+        <span className="ml-auto shrink-0 border-[1.5px] border-line px-1.5 py-0.5 text-[9px] font-bold tracking-[0.14em] text-dim">
+          {CHAIN_LABELS[wallet.chain].toUpperCase()}
         </span>
-        <button
-          type="button"
-          onClick={copy}
-          aria-label="Copy address"
-          className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-neutral-500 hover:bg-neutral-100 dark:hover:bg-surface-dark-100"
-        >
-          {copied ? (
-            <Check className="h-3.5 w-3.5 text-success" aria-hidden="true" />
-          ) : (
-            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-          )}
-          {copied ? 'Copied!' : 'Copy'}
-        </button>
       </div>
-      <div className="text-sm text-neutral-500">{CHAIN_LABELS[wallet.chain]}</div>
 
-      <div className={DIVIDER} />
-
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs uppercase tracking-wide text-neutral-500">Total Balance</span>
-        {wallet.holdings.length > 0 ? (
-          <span className="text-xs text-neutral-500">
-            Stablecoins {formatShare(wallet.stablecoinPct)}
+      <div className="px-[13px] py-[14px]">
+        <div className="flex items-center justify-between gap-2">
+          <span className="whitespace-nowrap text-[15px] font-bold tracking-[0.02em]">
+            {truncateAddress(wallet.address)}
           </span>
+          <button
+            type="button"
+            onClick={copy}
+            aria-label="Copy address"
+            className={`shrink-0 cursor-pointer border-[1.5px] px-[7px] py-[3px] text-[10px] font-bold uppercase tracking-[0.08em] transition-colors duration-tm ${
+              copied
+                ? 'border-acc bg-acc text-acc-ink'
+                : 'border-line text-fg hover:border-acc hover:bg-acc hover:text-acc-ink'
+            }`}
+          >
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </div>
+
+        <div className="mt-[14px] text-[9px] uppercase tracking-[0.14em] text-dim">
+          Total Balance
+        </div>
+        <div className="mt-1 text-[30px] font-bold tracking-[-0.02em] tabular-nums">
+          {formatUsd(wallet.totalUsd)}
+        </div>
+
+        {has ? (
+          <>
+            <div
+              className="mt-[12px] flex h-[10px] gap-0.5 border-[1.5px] border-line"
+              role="img"
+              aria-label={`Stablecoins ${formatShare(wallet.stablecoinPct)}`}
+            >
+              {wallet.holdings.map((h, i) => (
+                <div
+                  key={`${i}-${h.symbol}`}
+                  className={SEG[i % SEG.length]}
+                  // Dynamic segment width — the one sanctioned inline-style case (CLAUDE.md).
+                  style={{ width: `${h.pct}%` }}
+                  title={`${h.symbol} ${formatShare(h.pct)}`}
+                />
+              ))}
+            </div>
+            <div className="mt-2 flex justify-between text-[10px] uppercase tracking-[0.06em] text-dim">
+              <span>Allocation</span>
+              <span>Stablecoins {formatShare(wallet.stablecoinPct)}</span>
+            </div>
+          </>
         ) : null}
       </div>
-      <div className="text-xl font-bold text-neutral-900 dark:text-neutral-50">
-        {formatUsd(wallet.totalUsd)}
-      </div>
 
-      {wallet.holdings.length > 0 ? (
-        <div
-          className="mt-2 flex h-2 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-surface-dark-100"
-          role="img"
-          aria-label={`Holdings allocation${wallet.stablecoinPct > 0 ? `, ${formatShare(wallet.stablecoinPct)} stablecoins` : ''}`}
-        >
+      <div className="mt-[12px] px-[13px] text-[9px] uppercase tracking-[0.14em] text-dim">
+        Top Holdings
+      </div>
+      {has ? (
+        <div className="pb-1">
           {wallet.holdings.map((h, i) => (
             <div
+              // Holdings are a stable, pre-sorted snapshot; the index keeps keys
+              // unique when two holdings share a symbol.
               key={`${i}-${h.symbol}`}
-              className={ALLOC_COLORS[i % ALLOC_COLORS.length]}
-              // Dynamic segment width — the one sanctioned inline-style case (CLAUDE.md).
-              style={{ width: `${h.pct}%` }}
-              title={`${h.symbol} ${formatShare(h.pct)}`}
-            />
+              className="flex items-center gap-[10px] px-[13px] py-[7px] transition-colors duration-tm [&+&]:border-t [&+&]:border-line hover:bg-bg"
+            >
+              <span className="w-14 text-[13px] font-bold">{h.symbol}</span>
+              <span className="text-[12px] tabular-nums text-dim">{formatShare(h.pct)}</span>
+              <span className="ml-auto text-[13px] font-bold tabular-nums">{formatUsd(h.usd)}</span>
+            </div>
           ))}
         </div>
-      ) : null}
-
-      <div className={DIVIDER} />
-
-      <div className="mb-2 text-xs uppercase tracking-wide text-neutral-500">Top Holdings</div>
-      {wallet.holdings.length === 0 ? (
-        <p className="text-sm text-neutral-500">No significant holdings.</p>
       ) : (
-        <ul className="space-y-1">
-          {wallet.holdings.map((h, i) => (
-            <li
-              // Holdings are a stable, pre-sorted snapshot; index is a stable key
-              // and avoids collisions when two holdings share a symbol.
-              key={`${i}-${h.symbol}`}
-              className="flex items-center gap-2 rounded-md px-1 py-1 hover:bg-neutral-100 dark:hover:bg-surface-dark-100"
-            >
-              <CoinIcon src={h.imgUrl} symbol={h.symbol} size="sm" />
-              <span className="w-16 truncate text-sm font-medium text-neutral-900 dark:text-neutral-50">
-                {h.symbol}
-              </span>
-              <span className="w-10 text-right text-xs text-neutral-500">{formatShare(h.pct)}</span>
-              <span className="flex-1 text-right text-sm text-neutral-900 dark:text-neutral-50">
-                {formatUsd(h.usd)}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <p className="px-[13px] pb-0.5 pt-[6px] text-[12px] text-dim">No significant holdings.</p>
       )}
 
-      <div className={DIVIDER} />
-
-      <a
-        href={explorerAddressUrl(wallet.chain, wallet.address)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline"
-      >
-        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-        View on {explorerName(wallet.chain)}
-      </a>
+      <div className={`flex border-t-[1.5px] border-line ${has ? '' : 'mt-3'}`}>
+        <a
+          href={explorerAddressUrl(wallet.chain, wallet.address)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={BTN}
+        >
+          View on {explorerName(wallet.chain)} <ArrowOut />
+        </a>
+      </div>
     </div>
   )
 }

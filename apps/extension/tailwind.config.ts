@@ -1,48 +1,58 @@
 import type { Config } from 'tailwindcss'
 
-// Design tokens mirror UX.md §2. Dark mode is class-based: the shadow-root
-// container gets a `dark` class when X is in dark theme (see shadow/mount.ts).
+// Terminal design system — neo-brutalist mono desk, electric-lime accent.
+// Colors are CSS-variable-backed (defined in src/shadow/tokens.css) so a single
+// `dark` class on the card/popup root flips the whole palette without `dark:`
+// variants. Theme switching is wired in shadow/mount.ts and popup/App.tsx.
 export default {
   darkMode: 'class',
   content: ['./src/**/*.{ts,tsx,html}'],
   theme: {
     extend: {
       colors: {
-        neutral: {
-          50: '#FAFAFA',
-          100: '#F4F4F5',
-          500: '#71717A',
-          900: '#18181B',
+        bg: 'var(--ap-bg)',
+        surface: 'var(--ap-surface)',
+        fg: 'var(--ap-fg)',
+        dim: 'var(--ap-dim)',
+        line: 'var(--ap-line)',
+        acc: 'var(--ap-acc)',
+        'acc-ink': 'var(--ap-acc-ink)',
+        up: 'var(--ap-up)',
+        'up-ink': 'var(--ap-up-ink)',
+        down: 'var(--ap-down)',
+        'down-ink': 'var(--ap-down-ink)',
+        warn: 'var(--ap-warn)',
+        // Allocation-bar ramp (largest → smallest holding).
+        seg: {
+          1: 'var(--ap-seg1)',
+          2: 'var(--ap-seg2)',
+          3: 'var(--ap-seg3)',
+          4: 'var(--ap-seg4)',
+          5: 'var(--ap-seg5)',
         },
-        // Dark surfaces, referenced via the `dark:` variant.
-        surface: {
-          dark: '#18181B',
-          'dark-100': '#27272A',
-        },
-        success: '#10B981',
-        warning: '#F59E0B',
-        danger: '#EF4444',
-        accent: '#6366F1',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
-      },
-      fontSize: {
-        xs: '11px',
-        sm: '13px',
-        base: '14px',
-        lg: '16px',
-        xl: '20px',
+        mono: ['Space Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       boxShadow: {
-        card: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+        // One offset hard shadow per card — lime-tinted on dark, ink on light.
+        tm: 'var(--ap-shadow)',
       },
       width: {
         card: '320px',
       },
       maxHeight: {
         card: '480px',
+      },
+      transitionDuration: {
+        tm: '120ms',
+      },
+      keyframes: {
+        'ap-blink': { '50%': { opacity: '0' } },
+      },
+      animation: {
+        // Loading caret — gated behind motion-safe so it respects reduced-motion.
+        'ap-blink': 'ap-blink 1s steps(1) infinite',
       },
     },
   },

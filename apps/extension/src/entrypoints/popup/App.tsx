@@ -1,16 +1,20 @@
-// Popup root (UX §7). Theme follows the OS preference — the popup is our surface.
-import { type Chain, CHAIN_LABELS, DEFAULT_CHAIN, SUPPORTED_CHAINS } from '@alphapeek/shared'
+// Popup root (UX §7) in the Terminal pattern. Theme follows the OS preference —
+// the popup is our own surface.
+import { type Chain, DEFAULT_CHAIN } from '@alphapeek/shared'
 import { useEffect, useState } from 'react'
+import { ChainSelect } from '@/components/ChainSelect'
 import { FearGreedBadge } from '@/components/FearGreedBadge'
+import { ArrowOut } from '@/components/icons'
 import { ManualLookup } from '@/components/ManualLookup'
 import { RecentLookups } from '@/components/RecentLookups'
+import { BTN, LABEL } from '@/components/ui'
 import { getDefaultChain, setDefaultChain } from '@/services/settings'
 
 // Public repo links (the live remote). Not secrets, safe to inline.
 const REPO_URL = 'https://github.com/z-Amiryan/alphapeek'
 const ISSUES_URL = 'https://github.com/z-Amiryan/alphapeek/issues'
 
-const SECTION_DIVIDER = 'my-3 border-t border-neutral-100 dark:border-surface-dark-100'
+const SEC = 'border-b-[1.5px] border-line p-[13px]'
 
 function usePrefersDark(): boolean {
   const [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -47,63 +51,53 @@ export function App() {
   }
 
   return (
-    <div className={dark ? 'dark' : ''}>
-      <div className="w-[360px] max-h-[600px] overflow-y-auto bg-neutral-50 px-4 py-3 text-neutral-900 dark:bg-surface-dark dark:text-neutral-50">
-        <header className="flex items-baseline justify-between">
-          <h1 className="text-lg font-bold">AlphaPeek</h1>
-          <span className="text-xs text-neutral-500">v0.1</span>
+    <div className={`ap-root ${dark ? 'dark' : ''}`}>
+      <div className="max-h-[600px] w-[360px] overflow-y-auto border-[1.5px] border-line bg-surface font-mono text-fg antialiased">
+        <header className="flex items-center gap-[9px] border-b-[1.5px] border-line p-[13px]">
+          <span className="relative h-[18px] w-[18px] shrink-0 bg-acc">
+            <span className="absolute inset-[5px] bg-surface" />
+          </span>
+          <span className="text-[16px] font-bold tracking-[0.02em]">ALPHAPEEK</span>
+          <span className="ml-auto text-[10px] font-bold tracking-[0.08em] text-dim">v0.1</span>
         </header>
 
-        <div className={SECTION_DIVIDER} />
-        <FearGreedBadge />
+        <section className={SEC}>
+          <FearGreedBadge />
+        </section>
 
-        <div className={SECTION_DIVIDER} />
         {ready ? (
-          <ManualLookup
-            key={defaultChain}
-            defaultChain={defaultChain}
-            onLookupComplete={() => setReloadToken((n) => n + 1)}
-          />
+          <section className={SEC}>
+            <ManualLookup
+              key={defaultChain}
+              defaultChain={defaultChain}
+              onLookupComplete={() => setReloadToken((n) => n + 1)}
+            />
+          </section>
         ) : null}
 
-        <div className={SECTION_DIVIDER} />
-        <h2 className="mb-2 text-xs uppercase tracking-wide text-neutral-500">Recent lookups</h2>
-        <RecentLookups reloadToken={reloadToken} />
+        <section className={SEC}>
+          <span className={`mb-2 ${LABEL}`}>Recent Lookups</span>
+          <RecentLookups reloadToken={reloadToken} />
+        </section>
 
-        <div className={SECTION_DIVIDER} />
-        <label htmlFor="cl-default-chain" className="mb-1 block text-sm font-medium">
-          Default chain
-        </label>
-        <select
-          id="cl-default-chain"
-          value={defaultChain}
-          onChange={(e) => void onDefaultChainChange(e.target.value as Chain)}
-          className="w-full rounded-lg border border-neutral-100 bg-neutral-50 px-2 py-1.5 text-sm text-neutral-900 dark:border-surface-dark-100 dark:bg-surface-dark dark:text-neutral-50"
-        >
-          {SUPPORTED_CHAINS.map((c) => (
-            <option key={c} value={c}>
-              {CHAIN_LABELS[c]}
-            </option>
-          ))}
-        </select>
+        <section className={SEC}>
+          <label htmlFor="cl-default-chain" className={`mb-2 ${LABEL}`}>
+            Default Chain
+          </label>
+          <ChainSelect
+            id="cl-default-chain"
+            value={defaultChain}
+            onChange={(c) => void onDefaultChainChange(c)}
+            className="w-full"
+          />
+        </section>
 
-        <div className={SECTION_DIVIDER} />
-        <footer className="flex items-center gap-4 text-sm">
-          <a
-            href={REPO_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-accent hover:underline"
-          >
-            GitHub
+        <footer className="flex border-t-[1.5px] border-line">
+          <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className={BTN}>
+            GitHub <ArrowOut />
           </a>
-          <a
-            href={ISSUES_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-medium text-accent hover:underline"
-          >
-            Report a bug
+          <a href={ISSUES_URL} target="_blank" rel="noopener noreferrer" className={BTN}>
+            Report a Bug <ArrowOut />
           </a>
         </footer>
       </div>

@@ -34,26 +34,28 @@ export function RecentLookups({ reloadToken }: Props) {
   }, [reloadToken])
 
   if (entries.length === 0) {
-    return <p className="text-sm text-neutral-500">No recent lookups yet.</p>
+    return <p className="text-[12px] text-dim">No recent lookups yet.</p>
   }
 
   return (
-    <ul className="space-y-1">
+    <div className="-mx-[13px]">
       {entries.map((entry) => {
         const { label, value } = describe(entry)
         return (
-          <li
+          <div
             key={entry.key}
-            className="flex items-center gap-2 rounded-md px-1 py-1 text-sm hover:bg-neutral-100 dark:hover:bg-surface-dark-100"
+            className="flex cursor-pointer items-center gap-[10px] border-t border-line px-[13px] py-[9px] transition-colors duration-tm hover:bg-bg"
           >
-            <span className="font-mono text-neutral-900 dark:text-neutral-50">
+            <span className="text-[12px] font-bold tracking-[0.02em]">
               {truncateAddress(entry.addr)}
             </span>
-            <span className="flex-1 truncate text-neutral-500">{label}</span>
-            <span className="text-neutral-900 dark:text-neutral-50">{value}</span>
-          </li>
+            <span className="flex-1 truncate text-[11px] uppercase tracking-[0.04em] text-dim">
+              {label}
+            </span>
+            <span className="text-[12px] font-bold tabular-nums">{value}</span>
+          </div>
         )
       })}
-    </ul>
+    </div>
   )
 }

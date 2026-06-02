@@ -1,37 +1,73 @@
-// Error state (UX §3E). Per-code copy; retry is offered only where it could help.
+// Error state (UX §3E) in the Terminal pattern. Red state bar = hard error;
+// amber = back off / capacity. Retry is offered only where it could help.
 import type { LookupErrorCode } from '@alphapeek/shared'
-import { AlertTriangle } from 'lucide-react'
+import { BTN_SOLID } from './ui'
 
 type Props = {
   code?: LookupErrorCode
   onRetry?: () => void
 }
 
-const MESSAGES: Record<LookupErrorCode, string> = {
-  invalid_address: "That doesn't look like a valid EVM address.",
-  rate_limited: "You're checking addresses faster than we can keep up. Try again in a minute.",
-  daily_cap_reached: 'AlphaPeek is taking a quick breather. Try again tomorrow.',
-  upstream_error: 'Network error. Try again in a moment.',
+type ErrorConfig = {
+  kind: 'err' | 'warn'
+  title: string
+  message: string
+  retry: boolean
+}
+
+const CONFIG: Record<LookupErrorCode, ErrorConfig> = {
+  upstream_error: {
+    kind: 'err',
+    title: 'Connection Failed',
+    message: 'Network error. Try again in a moment.',
+    retry: true,
+  },
+  rate_limited: {
+    kind: 'warn',
+    title: 'Rate Limited',
+    message: "You're checking addresses faster than we can keep up. Try again in a minute.",
+    retry: true,
+  },
+  daily_cap_reached: {
+    kind: 'warn',
+    title: 'Daily Cap Reached',
+    message: 'AlphaPeek is taking a quick breather. Try again tomorrow.',
+    retry: false,
+  },
+  invalid_address: {
+    kind: 'err',
+    title: 'Invalid Address',
+    message: "That doesn't look like a valid EVM address.",
+    retry: false,
+  },
+}
+
+const BAR: Record<ErrorConfig['kind'], string> = {
+  err: 'border-b-down bg-down text-down-ink',
+  warn: 'border-b-warn bg-warn text-acc-ink',
 }
 
 export function ErrorView({ code = 'upstream_error', onRetry }: Props) {
-  const showRetry = Boolean(onRetry) && (code === 'upstream_error' || code === 'rate_limited')
+  const cfg = CONFIG[code]
+  const showRetry = Boolean(onRetry) && cfg.retry
 
   return (
-    <div className="px-4 py-4">
-      <div className="flex items-center gap-2 text-neutral-900 dark:text-neutral-50">
-        <AlertTriangle className="h-4 w-4 text-warning" aria-hidden="true" />
-        <span className="text-sm font-medium">Couldn't load this address</span>
+    <div>
+      <div
+        className={`flex items-center gap-2 border-b-[1.5px] px-[13px] py-[9px] ${BAR[cfg.kind]}`}
+      >
+        <span className="h-[13px] w-[13px] shrink-0 bg-current" />
+        <span className="text-[11px] font-bold uppercase tracking-[0.1em]">{cfg.title}</span>
       </div>
-      <p className="mt-2 text-sm text-neutral-500">{MESSAGES[code]}</p>
+      <div className="px-[13px] py-[14px]">
+        <p className="text-[12px] leading-[1.5] text-dim">{cfg.message}</p>
+      </div>
       {showRetry ? (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="mt-3 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
-        >
-          Retry
-        </button>
+        <div className="flex border-t-[1.5px] border-line">
+          <button type="button" onClick={onRetry} className={BTN_SOLID}>
+            Retry
+          </button>
+        </div>
       ) : null}
     </div>
   )

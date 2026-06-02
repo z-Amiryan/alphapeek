@@ -1,18 +1,17 @@
-// Token card (UX §3B).
+// Token card (UX §3B) in the Terminal pattern: mono header, hero price + change
+// pill, stepped sparkline, split-cell stats, hairline footer links.
 import type { Chain, TokenFlag, TokenSummary } from '@alphapeek/shared'
-import { AlertTriangle, ExternalLink, TrendingDown, TrendingUp } from 'lucide-react'
 import { coinStatsCoinUrl, dexScreenerUrl } from '@/lib/chain'
 import { formatCompact, formatPct, formatPrice } from '@/lib/format'
-import { CoinIcon } from './CoinIcon'
+import { ArrowOut } from './icons'
 import { Sparkline } from './Sparkline'
+import { BTN } from './ui'
 
 type Props = {
   token: TokenSummary
   chain: Chain
   addr: string
 }
-
-const DIVIDER = 'my-3 border-t border-neutral-100 dark:border-surface-dark-100'
 
 // Soft, market-data-derived hints — NOT a safety verdict (token-risk scoring is v0.2).
 const FLAG_LABELS: Record<TokenFlag, string> = {
@@ -26,90 +25,87 @@ export function TokenView({ token, chain, addr }: Props) {
   const flags = token.flags ?? []
 
   return (
-    <div className="px-4 py-3">
-      <div className="flex items-start gap-3">
-        <CoinIcon src={token.imgUrl} symbol={token.symbol} size="md" />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="truncate text-lg font-semibold text-neutral-900 dark:text-neutral-50">
-              {token.symbol}
-            </span>
-            <span className="shrink-0 text-xl font-bold text-neutral-900 dark:text-neutral-50">
-              {formatPrice(token.price)}
-            </span>
+    <div>
+      <div className="flex items-center gap-2 border-b-[1.5px] border-line px-[13px] py-[10px]">
+        <span className="h-[13px] w-[13px] shrink-0 bg-acc" />
+        <span className="truncate text-[13px] font-bold tracking-[0.04em]">
+          {token.symbol} / USD
+        </span>
+        <span className="ml-auto shrink-0 bg-acc px-1.5 py-0.5 text-[9px] font-bold tracking-[0.14em] text-acc-ink">
+          LIVE
+        </span>
+      </div>
+
+      <div className="px-[13px] py-[14px]">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[28px] font-bold leading-none tracking-[-0.02em] tabular-nums">
+            {formatPrice(token.price)}
+          </span>
+          <span
+            className={`shrink-0 whitespace-nowrap border-[1.5px] px-[7px] py-[3px] text-[12px] font-bold tabular-nums ${
+              up ? 'border-up bg-up text-up-ink' : 'border-down bg-down text-down-ink'
+            }`}
+          >
+            {formatPct(token.pCh24h)}
+          </span>
+        </div>
+
+        {token.sparkline.length >= 2 ? (
+          <Sparkline
+            data={token.sparkline}
+            className={`mt-[14px] block h-[44px] w-full ${up ? 'text-acc' : 'text-down'}`}
+          />
+        ) : null}
+
+        {flags.length > 0 ? (
+          <div className="mt-[12px] flex flex-wrap gap-1.5">
+            {flags.map((f) => (
+              <span
+                key={f}
+                className="inline-flex items-center gap-[5px] whitespace-nowrap border-[1.5px] border-warn px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-warn"
+              >
+                ⚠ {FLAG_LABELS[f]}
+              </span>
+            ))}
           </div>
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="truncate text-sm text-neutral-500">{token.name}</span>
-            <span
-              className={`inline-flex shrink-0 items-center gap-0.5 text-sm font-medium ${
-                up ? 'text-success' : 'text-danger'
-              }`}
-            >
-              {up ? (
-                <TrendingUp className="h-3.5 w-3.5" aria-hidden="true" />
-              ) : (
-                <TrendingDown className="h-3.5 w-3.5" aria-hidden="true" />
-              )}
-              {formatPct(token.pCh24h)}
-            </span>
+        ) : null}
+      </div>
+
+      <div className="grid grid-cols-2 border-t-[1.5px] border-line">
+        <div className="px-[13px] py-[10px]">
+          <div className="whitespace-nowrap text-[9px] uppercase tracking-[0.12em] text-dim">
+            Mcap
+          </div>
+          <div className="mt-1 text-[16px] font-bold tabular-nums">
+            {formatCompact(token.marketCap)}
+          </div>
+        </div>
+        <div className="border-l-[1.5px] border-line px-[13px] py-[10px]">
+          <div className="whitespace-nowrap text-[9px] uppercase tracking-[0.12em] text-dim">
+            Vol 24h
+          </div>
+          <div className="mt-1 text-[16px] font-bold tabular-nums">
+            {formatCompact(token.volume)}
           </div>
         </div>
       </div>
 
-      {flags.length > 0 ? (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {flags.map((f) => (
-            <span
-              key={f}
-              className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-warning dark:bg-surface-dark-100"
-            >
-              <AlertTriangle className="h-3 w-3" aria-hidden="true" />
-              {FLAG_LABELS[f]}
-            </span>
-          ))}
-        </div>
-      ) : null}
-
-      <div className={DIVIDER} />
-
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-        <dt className="text-neutral-500">Mcap</dt>
-        <dd className="text-right text-neutral-900 dark:text-neutral-50">
-          {formatCompact(token.marketCap)}
-        </dd>
-        <dt className="text-neutral-500">Vol</dt>
-        <dd className="text-right text-neutral-900 dark:text-neutral-50">
-          {formatCompact(token.volume)}
-        </dd>
-      </dl>
-
-      {token.sparkline.length >= 2 ? (
-        <>
-          <div className={DIVIDER} />
-          <Sparkline data={token.sparkline} className="h-[60px] w-full text-neutral-500" />
-        </>
-      ) : null}
-
-      <div className={DIVIDER} />
-
-      <div className="flex items-center gap-4">
+      <div className="flex border-t-[1.5px] border-line">
         <a
           href={coinStatsCoinUrl(token.coinId)}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline"
+          className={BTN}
         >
-          <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-          CoinStats
+          CoinStats <ArrowOut />
         </a>
         <a
           href={dexScreenerUrl(chain, addr)}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline"
+          className={BTN}
         >
-          <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-          DEXScreener
+          DEX <ArrowOut />
         </a>
       </div>
     </div>

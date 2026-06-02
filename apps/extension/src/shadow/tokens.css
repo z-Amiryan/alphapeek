@@ -1,0 +1,44 @@
+/* Terminal design tokens. Light is the default; `.dark` (set on the card/popup
+ * root) flips every value. `:root` won't reach inside a shadow root, so the
+ * variables live on the `.ap-root` wrapper both surfaces apply. */
+.ap-root {
+  --ap-bg: #ecebe3; /* page / feed backdrop, hover fills */
+  --ap-surface: #ffffff; /* card surface */
+  --ap-fg: #0d0d0d; /* primary text */
+  --ap-dim: #6b6b6b; /* secondary text / labels */
+  --ap-line: #0d0d0d; /* hairline rules + borders */
+  --ap-acc: #aad400; /* electric lime accent */
+  --ap-acc-ink: #0d0d0d; /* text on accent */
+  --ap-up: #aad400; /* gains (accent lime) */
+  --ap-up-ink: #0d0d0d;
+  --ap-down: #d62b2b; /* losses (red) */
+  --ap-down-ink: #ffffff;
+  --ap-warn: #b46b00; /* caution (amber) */
+  --ap-shadow: 5px 5px 0 #0d0d0d;
+  --ap-seg1: var(--ap-acc);
+  --ap-seg2: #1a1a1a;
+  --ap-seg3: #6b6b6b;
+  --ap-seg4: #a3a3a3;
+  --ap-seg5: #d0d0d0;
+}
+
+.ap-root.dark {
+  --ap-bg: #0d0d0d;
+  --ap-surface: #141414;
+  --ap-fg: #f2f2f2;
+  --ap-dim: #8a8a8a;
+  --ap-line: #353535;
+  --ap-acc: #c6f432;
+  --ap-acc-ink: #0d0d0d;
+  --ap-up: #c6f432;
+  --ap-up-ink: #0d0d0d;
+  --ap-down: #ff4d4d;
+  --ap-down-ink: #ffffff;
+  --ap-warn: #ffb627;
+  --ap-shadow: 5px 5px 0 rgba(198, 244, 50, 0.18);
+  --ap-seg1: var(--ap-acc);
+  --ap-seg2: #e6e6e6;
+  --ap-seg3: #8a8a8a;
+  --ap-seg4: #565656;
+  --ap-seg5: #383838;
+}

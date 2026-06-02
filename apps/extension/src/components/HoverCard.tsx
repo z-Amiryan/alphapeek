@@ -6,6 +6,7 @@ import { autoUpdate, flip, offset, shift, useFloating } from '@floating-ui/react
 import { useEffect, useId, useState } from 'react'
 import { requestLookup } from '@/services/messaging'
 import { type LookupState, ResultView } from './ResultView'
+import { CARD } from './ui'
 
 type Props = {
   addr: string
@@ -94,7 +95,7 @@ export function HoverCard({
         zIndex: TOP_LAYER,
         visibility: isPositioned ? 'visible' : 'hidden',
       }}
-      className={theme === 'dark' ? 'dark' : ''}
+      className={`ap-root ${theme === 'dark' ? 'dark' : ''}`}
     >
       <div
         id={cardId}
@@ -102,7 +103,7 @@ export function HoverCard({
         tabIndex={-1}
         onMouseEnter={onPointerEnter}
         onMouseLeave={onPointerLeave}
-        className="w-card max-h-card overflow-y-auto rounded-xl border border-neutral-100 bg-neutral-50 text-neutral-900 shadow-card dark:border-surface-dark-100 dark:bg-surface-dark dark:text-neutral-50"
+        className={CARD}
       >
         <ResultView
           state={state}

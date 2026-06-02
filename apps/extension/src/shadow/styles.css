@@ -1,0 +1,5 @@
+/* Tailwind entry for the hover card. cssInjectionMode 'ui' makes WXT inject this
+ * into the card's shadow root, not the host page — styles don't leak either way. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

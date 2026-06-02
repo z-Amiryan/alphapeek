@@ -1,0 +1,20 @@
+{
+  // Extends WXT's generated config (module resolution, @/ aliases).
+  // We layer our strict flags and the shared-package alias on top.
+  "extends": "./.wxt/tsconfig.json",
+  "compilerOptions": {
+    // AGENT: WXT/module-react@1.x configures JSX for the Vite/esbuild build but
+    // not for `tsc --noEmit`, so set it here for the typecheck pass. react-jsx =
+    // React 18 automatic runtime, matching @vitejs/plugin-react's default transform.
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "verbatimModuleSyntax": true,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@alphapeek/shared": ["../../packages/shared/src/types.ts"]
+    }
+  }
+}

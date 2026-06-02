@@ -6,6 +6,12 @@
 
 **Goal:** Validate the hover-card interaction model on a single high-traffic site.
 
+**Positioning (evidence-backed, 2026-06-02):** a **trending/established token + wallet inspector**
+for Crypto Twitter — *not* a minute-zero launch-sniper. CoinStats has a ~few-hour indexing lag
+(see SPEC § 9), so the very newest tokens return `unknown` by design. Lean the value on Base/BNB
+trending tokens + wallet inspection (X's native cashtags don't do wallets). Detection verified
+working across both chains; BSC required slug fixes (see SPEC § 4).
+
 **In scope:**
 - Chrome extension only (Manifest V3)
 - X / Twitter (`x.com`, `twitter.com`) only
@@ -15,8 +21,8 @@
 - Hover-triggered (200ms delay), no page-load scanning
 - Dotted underline as the hover-discoverability cue
 - Card variants: token, wallet, unknown, loading, error
-- Wallet card shows: total balance, top 5 holdings (no PnL — v0.2)
-- Token card shows: price, 24h change, market cap, volume, 7d sparkline
+- Wallet card shows: total balance, top 5 holdings, **allocation bar**, **stablecoin %** (no PnL — v0.2)
+- Token card shows: price, 24h change, market cap, volume, 7d sparkline, **derived flags** (low-liquidity / high-volatility — market-data hints, not a safety verdict)
 - Popup UI: Fear & Greed, manual address lookup, default chain setting, recent lookups
 - Anonymous (no login, no account)
 - Cloudflare Worker proxy with KV cache + per-IP rate limit + daily cap

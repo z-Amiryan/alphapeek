@@ -169,52 +169,78 @@ Always bump extension version in `wxt.config.ts` `manifest.version` before any W
 
 Two workflows in `.github/workflows/`:
 
-### `ci.yml` (runs on every PR)
+> The pnpm version is **not** pinned in the workflow `with:` block — `pnpm/action-setup@v4` reads it from the root `package.json` `packageManager` field (`pnpm@9.12.0`). Passing `version` too makes the action error on the conflict.
+
+### `ci.yml` (runs on every PR and push to main)
 
 ```yaml
 name: CI
-on: pull_request
+on:
+  pull_request:
+  push:
+    branches: [main]
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with: { version: 9 }
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
+      - run: pnpm test
       - run: pnpm build
+      - name: Upload extension build
+        uses: actions/upload-artifact@v4
+        with:
+          name: alphapeek-extension
+          path: apps/extension/.output/chrome-mv3/
+          if-no-files-found: error
 ```
 
-### `deploy-worker.yml` (runs on push to main)
+### `deploy-worker.yml` (runs on push to main, **gated by approval**)
+
+The deploy job is routed through the `production` GitHub Environment, so it
+**pauses for required-reviewer approval** before every production deploy — this
+keeps the "ask before deploying to Cloudflare production" rule (§2) true even
+though it triggers on merge.
 
 ```yaml
 name: Deploy Worker
 on:
   push:
     branches: [main]
-    paths: ['apps/worker/**', 'packages/shared/**']
+    paths:
+      - 'apps/worker/**'
+      - 'packages/shared/**'
+      - '.github/workflows/deploy-worker.yml'
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: production        # pauses for required-reviewer approval
+    concurrency:
+      group: deploy-worker
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with: { version: 9 }
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @alphapeek/worker run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # Uncomment only for a multi-account API token:
+          # CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 ```
 
-🚨 **ASK USER** to add these GitHub repo secrets:
-- `CLOUDFLARE_API_TOKEN` — create at https://dash.cloudflare.com/profile/api-tokens with "Edit Cloudflare Workers" template
-- `COINSTATS_API_KEY` is set via `wrangler secret put`, NOT as a GitHub secret. Never put it in repo or CI logs.
+🚨 **ASK USER** to configure these GitHub repo settings before the deploy can succeed:
+1. **Create the `production` Environment** (Settings → Environments) and add the maintainer as a **Required reviewer** — this is what makes the gate pause.
+2. **Add the `CLOUDFLARE_API_TOKEN` secret**, scoped to the `production` environment — create the token at https://dash.cloudflare.com/profile/api-tokens with the "Edit Cloudflare Workers" template.
+3. The Worker also needs its **KV namespace IDs** filled into `wrangler.toml` (§2) and the **first deploy done manually** (§2) — a non-interactive `wrangler deploy` fails until both are true, regardless of the token.
+4. `COINSTATS_API_KEY` is set via `wrangler secret put` (§2), **NOT** as a GitHub secret. Never put it in repo or CI logs.
 
 ## 9. Rollback procedure
 

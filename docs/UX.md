@@ -105,6 +105,8 @@ Single spinner icon (lucide `Loader2`, spin animation), centered. Card height ~6
 │ [🪙] PEPE                $0.000002 │ ← row 1: icon + symbol + price
 │      Pepe Coin            ↑ 12.4% │ ← row 2: name + 24h change (colored)
 │ ────────────────────────────────── │
+│ ⚠ Low liquidity  ⚠ High volatility │ ← flag badges (only if present)
+│ ────────────────────────────────── │
 │ Mcap   $2.1B                       │ ← stats grid
 │ Vol    $480M                       │
 │ ────────────────────────────────── │
@@ -117,6 +119,9 @@ Single spinner icon (lucide `Loader2`, spin animation), centered. Card height ~6
 - **Token icon:** 32px circle, fallback to gray circle with first letter of symbol if `imgUrl` fails
 - **Price:** right-aligned, large (`text-xl`), bold
 - **24h change:** colored green/red, arrow icon (lucide `TrendingUp` / `TrendingDown`)
+- **Flag badges (`TokenSummary.flags`):** soft amber pills for `low_liquidity` (24h vol < $50k) and
+  `high_volatility` (|24h| ≥ 25%) — derived from market data only. **NOT a safety verdict** — true
+  token-risk (honeypot/ownership) is deferred to v0.2. Render nothing when `flags` is empty.
 - **Sparkline:** SVG, neutral gray stroke 2px, no fill, no axes, no labels. Just the shape. Min/max from data, no padding.
 - **Footer links:** open in new tab. Use `target="_blank"` + `rel="noopener noreferrer"`.
 
@@ -127,8 +132,9 @@ Single spinner icon (lucide `Loader2`, spin animation), centered. Card height ~6
 │ 0x1234…abcd   [⎘ copy]             │ ← row 1: truncated address + copy
 │ Ethereum                           │ ← row 2: chain name
 │ ────────────────────────────────── │
-│ Total Balance                      │ ← label
+│ Total Balance        Stablecoins 18%│ ← label + stablecoin % (right)
 │ $48,237,512                        │ ← big number (text-xl)
+│ ▰▰▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱           │ ← allocation bar (top holdings, value-neutral hues)
 │ ────────────────────────────────── │
 │ Top Holdings                       │ ← section label
 │ [Ξ] ETH    42%      $20,259,755   │ ← top 5, sorted by USD desc
@@ -137,12 +143,17 @@ Single spinner icon (lucide `Loader2`, spin animation), centered. Card height ~6
 │ [◇] LINK    8%       $3,858,801   │
 │ [Φ] AAVE    5%       $2,411,876   │
 │ ────────────────────────────────── │
-│ [↗ View full wallet on CoinStats] │
+│ [↗ View on Etherscan]             │
 └────────────────────────────────────┘
 ```
 
 - **Address:** truncated to `0x1234…abcd` (first 6 + ellipsis + last 4)
 - **Copy button:** lucide `Copy` icon. On click: copy full address to clipboard + brief toast inside card "Copied!"
+- **Stablecoin % (`WalletSummary.stablecoinPct`):** "risk-on vs parked" signal, computed worker-side
+  over the FULL holdings (before the top-5 slice), so it's accurate even when stables fall outside
+  the shown rows. Shown next to "Total Balance".
+- **Allocation bar:** thin stacked bar, one value-neutral colored segment per top holding (width =
+  `pct`); the uncovered remainder of the track reads as "other". Purely visual — no green/red.
 - **Holdings rows:** icon (24px) + symbol + percentage + USD. Hover row for slight bg highlight.
 - **Total balance:** `Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })`
 
@@ -154,15 +165,20 @@ Note: v0.1 wallet card **does not show PnL** because the PnL endpoint costs addi
 ┌────────────────────────────────────┐
 │ 0x1234…abcd                        │
 │                                    │
-│ No data found for this address.    │
-│ It might be a fresh wallet or an   │
+│ No data yet. This could be a       │
+│ brand-new token that isn't indexed │
+│ yet, a fresh/empty wallet, or an   │
 │ unsupported chain.                 │
 │                                    │
-│ [↗ Check on Etherscan]             │
+│ [↗ DEXScreener]   [↗ Etherscan]   │
 └────────────────────────────────────┘
 ```
 
-Defensive UX. Don't gaslight the user — say what we know.
+Defensive UX. Don't gaslight the user — say what we know. **CoinStats has a ~few-hour indexing
+lag (SPEC §9),** so a freshly-launched token contract legitimately lands here; DexScreener usually
+lists it before CoinStats, so we offer that link alongside the explorer. We deliberately do NOT
+claim "this is a new token" — we can't distinguish a too-new contract from an empty wallet without
+an on-chain `getCode` check, so the copy stays honest about all three possibilities.
 
 ### E. Error state
 

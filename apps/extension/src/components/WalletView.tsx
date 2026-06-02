@@ -15,6 +15,16 @@ type Props = {
 
 const DIVIDER = 'my-3 border-t border-neutral-100 dark:border-surface-dark-100'
 
+// Allocation-bar segment colors — value-neutral hues (no green=good / red=bad connotation),
+// one per top holding, cycled. The uncovered remainder of the track reads as "other".
+const ALLOC_COLORS = [
+  'bg-indigo-500',
+  'bg-violet-500',
+  'bg-sky-500',
+  'bg-teal-500',
+  'bg-fuchsia-500',
+] as const
+
 export function WalletView({ wallet }: Props) {
   const [copied, setCopied] = useState(false)
 
@@ -52,10 +62,35 @@ export function WalletView({ wallet }: Props) {
 
       <div className={DIVIDER} />
 
-      <div className="text-xs uppercase tracking-wide text-neutral-500">Total Balance</div>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-xs uppercase tracking-wide text-neutral-500">Total Balance</span>
+        {wallet.holdings.length > 0 ? (
+          <span className="text-xs text-neutral-500">
+            Stablecoins {formatShare(wallet.stablecoinPct)}
+          </span>
+        ) : null}
+      </div>
       <div className="text-xl font-bold text-neutral-900 dark:text-neutral-50">
         {formatUsd(wallet.totalUsd)}
       </div>
+
+      {wallet.holdings.length > 0 ? (
+        <div
+          className="mt-2 flex h-2 w-full overflow-hidden rounded-full bg-neutral-100 dark:bg-surface-dark-100"
+          role="img"
+          aria-label={`Holdings allocation${wallet.stablecoinPct > 0 ? `, ${formatShare(wallet.stablecoinPct)} stablecoins` : ''}`}
+        >
+          {wallet.holdings.map((h, i) => (
+            <div
+              key={`${i}-${h.symbol}`}
+              className={ALLOC_COLORS[i % ALLOC_COLORS.length]}
+              // Dynamic segment width — the one sanctioned inline-style case (CLAUDE.md).
+              style={{ width: `${h.pct}%` }}
+              title={`${h.symbol} ${formatShare(h.pct)}`}
+            />
+          ))}
+        </div>
+      ) : null}
 
       <div className={DIVIDER} />
 

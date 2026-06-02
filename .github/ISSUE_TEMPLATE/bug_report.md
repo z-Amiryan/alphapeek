@@ -7,7 +7,7 @@ labels: bug
 
 <!--
 Security issue? Do NOT file it here. Report privately via Security Advisories:
-https://github.com/ZhoraAmiryan/alphapeek/security/advisories/new
+https://github.com/z-Amiryan/alphapeek/security/advisories/new
 -->
 
 ## What happened

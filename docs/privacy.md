@@ -49,4 +49,4 @@ If this policy changes, the "Last updated" date above will change and the new ve
 
 ## Contact
 
-Open an issue at the [AlphaPeek GitHub repository](https://github.com/ZhoraAmiryan/alphapeek) for any privacy questions or concerns.
+Open an issue at the [AlphaPeek GitHub repository](https://github.com/z-Amiryan/alphapeek) for any privacy questions or concerns.

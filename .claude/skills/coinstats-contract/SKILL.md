@@ -33,7 +33,8 @@ Query params:
     "pCh24h": -0.01,
     "marketCap": 112000000000,
     "volume": 45000000000,
-    "sparkline": [0.999, 1.0, 1.001] // ~168 hourly points; may be []
+    "sparkline": [0.999, 1.0, 1.001], // ~168 hourly points; may be []
+    "flags": [] // 'low_liquidity' | 'high_volatility' — market-data hints, NOT a safety verdict
   }
 }
 ```
@@ -47,7 +48,8 @@ Query params:
     "totalUsd": 12345.67,
     "holdings": [ // top 5, USD-desc
       { "symbol": "ETH", "name": "Ethereum", "imgUrl": "https://…", "usd": 9000.0, "pct": 72.9 }
-    ]
+    ],
+    "stablecoinPct": 12.4 // 0-100, computed over the FULL holdings before the top-5 slice
   }
 }
 ```

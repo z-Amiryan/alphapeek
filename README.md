@@ -8,7 +8,7 @@
 
 ## What it does
 
-Hover any EVM wallet address on X/Twitter → instant card showing balance and top holdings for wallets, or price, market cap, and 7-day sparkline for token contracts. No login, no setup, no friction.
+Hover any EVM wallet or token address on X/Twitter → instant card. **Wallets:** balance, top holdings with an allocation bar, and stablecoin % (risk-on vs parked). **Tokens:** price, market cap, volume, a 7-day sparkline, and market-data flags (low-liquidity / high-volatility — hints, not a safety verdict). No login, no setup, no friction.
 
 ## Architecture at a glance
 

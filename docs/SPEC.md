@@ -159,6 +159,7 @@ type TokenSummary = {
   marketCap: number
   volume: number
   sparkline: number[]  // 7d, ~168 points
+  flags: TokenFlag[]   // 'low_liquidity' | 'high_volatility' — market-data hints, not a safety verdict
 }
 
 type WalletSummary = {
@@ -172,6 +173,7 @@ type WalletSummary = {
     usd: number
     pct: number  // 0-100
   }>
+  stablecoinPct: number  // 0-100, computed over the FULL holdings before the top-N slice
 }
 ```
 
@@ -402,6 +404,8 @@ export type Chain =
   | 'ethereum' | 'bsc' | 'polygon' | 'base'
   | 'arbitrum' | 'optimism' | 'avalanche'
 
+export type TokenFlag = 'low_liquidity' | 'high_volatility'
+
 export type TokenSummary = {
   coinId: string
   name: string
@@ -412,6 +416,7 @@ export type TokenSummary = {
   marketCap: number
   volume: number
   sparkline: number[]
+  flags: TokenFlag[]  // market-data hints only — NOT a safety verdict
 }
 
 export type WalletSummary = {
@@ -425,6 +430,7 @@ export type WalletSummary = {
     usd: number
     pct: number
   }>
+  stablecoinPct: number  // 0-100, over the FULL holdings before the slice
 }
 
 export type LookupResult =

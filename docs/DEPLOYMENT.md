@@ -322,4 +322,9 @@ small unlisted beta.
 
 **Contributors / forks:** deploy your **own** Worker with your **own** key
 (§2) and point `VITE_WORKER_URL` at it — never share or commit a key, and never
-rely on someone else's proxy.
+rely on someone else's proxy. Note the Worker host is configured in **two** places:
+`VITE_WORKER_URL` in `apps/extension/.env` (the fetch target) **and** the
+`connect-src` allowlist in `apps/extension/wxt.config.ts` (the manifest CSP). A
+**production** build pointed at your own Worker is silently CSP-blocked until **both**
+are updated; local dev against `http://localhost:8787` works out of the box (the
+dev-mode CSP allows it).

@@ -7,12 +7,20 @@ import { FearGreedBadge } from '@/components/FearGreedBadge'
 import { ArrowOut, LogoMark } from '@/components/icons'
 import { ManualLookup } from '@/components/ManualLookup'
 import { RecentLookups } from '@/components/RecentLookups'
-import { BTN, LABEL } from '@/components/ui'
+import { BTN, FOOT, LABEL } from '@/components/ui'
 import { getDefaultChain, setDefaultChain } from '@/services/settings'
 
-// Public repo links (the live remote). Not secrets, safe to inline.
+// Public links (the live remotes). Not secrets, safe to inline.
 const REPO_URL = 'https://github.com/z-Amiryan/alphapeek'
 const ISSUES_URL = 'https://github.com/z-Amiryan/alphapeek/issues'
+const PRIVACY_URL = 'https://z-amiryan.github.io/alphapeek/privacy.html'
+const COINSTATS_URL = 'https://coinstats.app'
+// Set once the extension is live on the Web Store and its id is known; until then the
+// "Rate it" link is hidden rather than shipped broken.
+const WEBSTORE_ID = ''
+const REVIEW_URL = WEBSTORE_ID
+  ? `https://chromewebstore.google.com/detail/${WEBSTORE_ID}/reviews`
+  : ''
 
 const SEC = 'border-b-[1.5px] border-line p-[13px]'
 
@@ -90,7 +98,7 @@ export function App() {
           />
         </section>
 
-        <footer className="flex border-t-[1.5px] border-line">
+        <footer className={FOOT}>
           <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className={BTN}>
             GitHub <ArrowOut />
           </a>
@@ -98,6 +106,44 @@ export function App() {
             Report a Bug <ArrowOut />
           </a>
         </footer>
+
+        <div className="border-t-[1.5px] border-line px-[13px] py-[10px] text-center">
+          <div className="flex items-center justify-center gap-2 text-[10px] font-bold uppercase tracking-[0.08em] text-dim">
+            <a
+              href={PRIVACY_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition-colors duration-tm hover:text-fg"
+            >
+              Privacy
+            </a>
+            {REVIEW_URL ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <a
+                  href={REVIEW_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="transition-colors duration-tm hover:text-fg"
+                >
+                  Rate it ★
+                </a>
+              </>
+            ) : null}
+            <span aria-hidden="true">·</span>
+            <a
+              href={COINSTATS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition-colors duration-tm hover:text-fg"
+            >
+              Powered by CoinStats
+            </a>
+          </div>
+          <p className="mt-1.5 text-[9px] leading-tight text-dim">
+            Informational only — not financial advice.
+          </p>
+        </div>
       </div>
     </div>
   )

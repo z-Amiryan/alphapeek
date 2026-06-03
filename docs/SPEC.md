@@ -191,6 +191,7 @@ Returns `{ ok: true, version: string }`. No auth, no rate limit.
 |---|---|---|---|
 | KV `CACHE` | `kind:{chain}:{addr}` | 30 days | An address doesn't change type |
 | KV `CACHE` | `token:{coinId}` | 60 seconds | Price moves |
+| KV `CACHE` | `chart:{coinId}` | 900 seconds | 7d sparkline is hourly data; cached apart from `token` so a flaky chart call can't pin a blank sparkline, and to cut the ~3-credit chart cost |
 | KV `CACHE` | `wallet:{chain}:{addr}` | 300 seconds | Balances change but slowly |
 | CF edge cache | full URL | 60 seconds | Free, shared globally |
 

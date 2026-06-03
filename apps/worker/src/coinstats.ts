@@ -202,14 +202,26 @@ export function normalizeChart(payload: unknown): number[] {
   return out
 }
 
-export async function fetchToken(env: Env, coinId: string): Promise<TokenSummary> {
-  const [details, chart] = await Promise.all([
-    cs(env, `/coins/${encodeURIComponent(coinId)}`, {}),
-    // Correct endpoint is `/coins/charts?coinIds=…` (plural); the per-coin `/coins/{id}/charts`
-    // path 404s and was being swallowed by the catch, yielding an empty sparkline.
-    cs(env, '/coins/charts', { coinIds: coinId, period: '1w' }).catch(() => null),
-  ])
-  return normalizeToken(coinId, details, normalizeChart(chart))
+// Token detail WITHOUT the chart — the sparkline is fetched and cached separately
+// (see fetchChart + index.ts) so a flaky chart call can't pin an empty sparkline on
+// the whole token entry for the token TTL.
+export async function fetchTokenDetail(env: Env, coinId: string): Promise<TokenSummary> {
+  const details = await cs(env, `/coins/${encodeURIComponent(coinId)}`, {})
+  return normalizeToken(coinId, details, [])
+}
+
+// Best-effort 7-day sparkline. Returns `null` on failure OR an empty result so the
+// cache layer (which never stores `null`) retries on the next request instead of
+// caching a blank chart — while a real chart gets cached on its own longer TTL.
+// Correct endpoint is `/coins/charts?coinIds=…` (plural); the per-coin
+// `/coins/{id}/charts` path 404s.
+export async function fetchChart(env: Env, coinId: string): Promise<number[] | null> {
+  const payload = await cs(env, '/coins/charts', { coinIds: coinId, period: '1w' }).catch(
+    () => null,
+  )
+  if (payload === null) return null
+  const points = normalizeChart(payload)
+  return points.length > 0 ? points : null
 }
 
 export function normalizeWallet(addr: string, chain: Chain, payload: unknown): WalletSummary {

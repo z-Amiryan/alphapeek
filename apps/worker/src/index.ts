@@ -5,8 +5,9 @@ import { cached } from './cache'
 import {
   UpstreamError,
   detectTokenCoinId,
+  fetchChart,
   fetchFearGreed,
-  fetchToken,
+  fetchTokenDetail,
   fetchWallet,
 } from './coinstats'
 import { type Env, WORKER_VERSION } from './env'
@@ -20,6 +21,10 @@ const NOT_A_TOKEN = 'addr:'
 const DAY = 60 * 60 * 24
 const KIND_TTL = 30 * DAY
 const TOKEN_TTL = 60
+// The 7d sparkline is hourly data, so it can outlive the 60s price refresh; a longer
+// TTL also cuts the ~3-credit chart call. Cached apart from the token so a chart hiccup
+// degrades to "no chart this request" (retried next time), never a blank-for-TOKEN_TTL.
+const CHART_TTL = 900
 const WALLET_TTL = 300
 const FEAR_GREED_TTL = 300
 
@@ -114,8 +119,11 @@ async function resolve(env: Env, addr: string, chain: Chain): Promise<LookupResu
   })
 
   if (kind && kind !== NOT_A_TOKEN) {
-    const token = await cached(env, `token:${kind}`, TOKEN_TTL, () => fetchToken(env, kind))
-    if (token) return { kind: 'token', data: token }
+    const token = await cached(env, `token:${kind}`, TOKEN_TTL, () => fetchTokenDetail(env, kind))
+    if (token) {
+      const sparkline = await cached(env, `chart:${kind}`, CHART_TTL, () => fetchChart(env, kind))
+      return { kind: 'token', data: { ...token, sparkline: sparkline ?? [] } }
+    }
   }
 
   const wallet = await cached(env, `wallet:${chain}:${addr}`, WALLET_TTL, () =>

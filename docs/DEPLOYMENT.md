@@ -125,7 +125,8 @@ Chrome reviewers ask why we need each permission. Pre-write these:
 pnpm --filter @alphapeek/extension run build
 # Outputs apps/extension/.output/chrome-mv3/
 pnpm --filter @alphapeek/extension run zip
-# Outputs apps/extension/.output/chrome-mv3.zip (this is what you upload)
+# Outputs apps/extension/.output/alphapeekextension-<version>-chrome.zip
+# (e.g. alphapeekextension-0.1.0-chrome.zip — this is what you upload)
 ```
 
 ## 6. 🚨 ASK USER: Chrome Web Store submission

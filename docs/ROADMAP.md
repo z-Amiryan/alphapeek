@@ -21,7 +21,7 @@ working across both chains; BSC required slug fixes (see SPEC § 4).
 - Hover-triggered (200ms delay), no page-load scanning
 - Dotted underline as the hover-discoverability cue
 - Card variants: token, wallet, unknown, loading, error
-- Wallet card shows: total balance, top 5 holdings, **allocation bar**, **stablecoin %** (no PnL — v0.2)
+- Wallet card shows: total balance, top 5 holdings, **allocation bar**, **stablecoin %** (no PnL — v0.2); each holding **deep-links to its CoinStats coin page**
 - Token card shows: price, 24h change, market cap, volume, 7d sparkline, **derived flags** (low-liquidity / high-volatility — market-data hints, not a safety verdict)
 - Popup UI: Fear & Greed, manual address lookup, default chain setting, recent lookups
 - Anonymous (no login, no account)
@@ -54,6 +54,18 @@ working across both chains; BSC required slug fixes (see SPEC § 4).
 - **DeFi positions summary** ("$X across N protocols")
 - **New sites:** Etherscan family (etherscan, basescan, arbiscan, bscscan, polygonscan, optimistic.etherscan, snowtrace), DEXScreener, GeckoTerminal
 - **Chain inference v2:** URL context (path-based detection on block explorers)
+- **Chain expansion** (analysis 2026-06; CoinStats supports 120+ chains via `GET /wallet/blockchains`):
+  - *First, close the v0.1 gap:* verify the currently-**unverified** `optimism` / `avalanche` slugs
+    (SPEC §4 marks them unverified) against the live API.
+  - *EVM drop-ins* — share the same `0x…40hex` address space as our current 7, so no new detection
+    regex is needed, only verified dual-slugs (`/coins?blockchains=` + `/wallet/balance?connectionId=`):
+    **zkSync Era, Polygon zkEVM, Fantom, Immutable X**, plus emerging L2s (Linea, Scroll, Blast) if indexed.
+  - *Kill wallet chain-inference:* evaluate **`GET /wallet/balances?address=…&networks=all`** (plural) —
+    returns all EVM chains' balances in one call, so wallets no longer need a guessed chain. Weigh the
+    higher credit cost. This is the architecturally cleaner path than adding EVM chains one at a time.
+  - *Non-EVM chains* (Cardano, Tron, XRP, Cosmos, Polkadot, Near, Algorand, Stellar, LTC/DOGE/BCH,
+    Hedera, StarkNet, …) use different address formats → a **new per-chain detection model**, not a slug
+    add. Treat as its own effort. **Solana** (see v0.3) is the highest-value non-EVM target for Crypto Twitter.
 - **Public Chrome Web Store listing** (out of beta)
 
 ## v0.3 — Stickiness

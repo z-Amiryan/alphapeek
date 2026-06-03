@@ -49,62 +49,51 @@ alphapeek/
 │   │   ├── src/
 │   │   │   ├── entrypoints/
 │   │   │   │   ├── content.ts            # Content script (X/Twitter only)
-│   │   │   │   ├── background.ts         # Service worker
-│   │   │   │   └── popup/
-│   │   │   │       ├── index.html
-│   │   │   │       ├── main.tsx
-│   │   │   │       └── App.tsx
-│   │   │   ├── components/
-│   │   │   │   ├── HoverCard.tsx         # The main card
-│   │   │   │   ├── TokenView.tsx         # Token variant
-│   │   │   │   ├── WalletView.tsx        # Wallet variant
-│   │   │   │   ├── Sparkline.tsx         # SVG mini chart
-│   │   │   │   ├── LoadingView.tsx
-│   │   │   │   └── ErrorView.tsx
-│   │   │   ├── lib/
-│   │   │   │   ├── regex.ts              # Address detection
-│   │   │   │   ├── chain.ts              # Chain inference
-│   │   │   │   ├── format.ts             # Number/address formatters
-│   │   │   │   └── debug.ts              # Strip-in-build logger
-│   │   │   ├── services/
-│   │   │   │   ├── worker-client.ts      # fetch wrapper to Worker
-│   │   │   │   ├── cache.ts              # IndexedDB via idb
-│   │   │   │   └── messaging.ts          # chrome.runtime.* helpers
-│   │   │   ├── shadow/
-│   │   │   │   ├── mount.ts              # Shadow DOM mount
-│   │   │   │   └── styles.css            # Tailwind output injected here
-│   │   │   └── index.css                 # Tailwind directives
-│   │   ├── public/
-│   │   │   ├── icon-16.png
-│   │   │   ├── icon-48.png
-│   │   │   └── icon-128.png
-│   │   ├── wxt.config.ts
-│   │   ├── tailwind.config.ts
+│   │   │   │   ├── background.ts         # Service worker (IndexedDB cache + Worker fetch)
+│   │   │   │   └── popup/                # index.html, main.tsx, App.tsx
+│   │   │   ├── components/               # HoverCard, ResultView, TokenView, WalletView,
+│   │   │   │                             # Sparkline, LoadingView, ErrorView, UnknownView,
+│   │   │   │                             # FearGreedBadge, ManualLookup, RecentLookups,
+│   │   │   │                             # ChainSelect, icons.tsx, ui.ts
+│   │   │   ├── lib/                      # regex, chain, format, debug
+│   │   │   ├── services/                 # worker-client, cache (idb), messaging, settings
+│   │   │   ├── shadow/                   # mount.ts, styles.css, tokens.css (design tokens)
+│   │   │   ├── index.css                 # Tailwind directives
+│   │   │   └── vite-env.d.ts
+│   │   ├── public/                       # icon-16/48/128.png + icon.svg
+│   │   ├── scripts/make-icons.mjs        # regenerates PNG icons from icon.svg (postinstall)
+│   │   ├── wxt.config.ts                 # manifest + CSP (see §5)
+│   │   ├── tailwind.config.ts            # Terminal design system (see UX.md §2)
 │   │   ├── postcss.config.js
 │   │   ├── tsconfig.json
 │   │   └── package.json
-│   └── worker/
-│       ├── src/
-│       │   └── index.ts                  # Hono app (see §4)
-│       ├── wrangler.toml
-│       ├── tsconfig.json
-│       └── package.json
+│   ├── worker/
+│   │   ├── src/
+│   │   │   ├── index.ts                  # Hono router (see §4)
+│   │   │   ├── coinstats.ts              # CoinStats client + normalizers
+│   │   │   ├── cache.ts                  # read-through KV cache helper
+│   │   │   ├── ratelimit.ts              # per-IP limit + daily cap
+│   │   │   └── env.ts                    # Env bindings + WORKER_VERSION
+│   │   ├── test/normalize.test.ts        # Vitest unit tests
+│   │   ├── wrangler.toml
+│   │   ├── tsconfig.json
+│   │   └── package.json
+│   └── store-visuals/                    # Dev-only: renders the real cards over a faux-X
+│                                         # feed to export Chrome Web Store screenshots
 ├── packages/
 │   └── shared/
-│       ├── src/
-│       │   └── types.ts                  # LookupResult, TokenSummary, etc.
-│       ├── tsconfig.json
-│       └── package.json
+│       └── src/types.ts                  # LookupResult, TokenSummary, etc. (the contract)
 ├── docs/
 │   ├── SPEC.md  (this file)
 │   ├── UX.md
 │   ├── ROADMAP.md
 │   ├── DEPLOYMENT.md
-│   └── privacy.md
-├── .github/
-│   └── workflows/
-│       ├── ci.yml                        # typecheck + build on PR
-│       └── deploy-worker.yml             # auto-deploy worker on main
+│   ├── store-listing.md                  # Chrome Web Store listing copy
+│   ├── privacy.md
+│   └── privacy.html                      # hosted privacy policy (GitHub Pages)
+├── assets/                               # logo.svg, logo-animated.svg (README/branding)
+├── .github/workflows/                    # ci.yml + deploy-worker.yml
+├── LICENSE                               # MIT
 ├── biome.json
 ├── pnpm-workspace.yaml
 ├── package.json                          # root, with scripts
@@ -122,7 +111,7 @@ alphapeek/
 | UI library | React | ^18.3 | Familiar, mature |
 | Styling | Tailwind CSS | ^3.4 | v3 (v4 has Shadow DOM quirks) |
 | Tooltip positioning | @floating-ui/react | ^0.27 | Industry standard |
-| Icons | lucide-react | ^0.460 | Tree-shakeable |
+| Icons | hand-rolled inline SVG (`components/icons.tsx`) | — | A few square-cap paths; no icon-font dependency |
 | IndexedDB wrapper | idb | ^8 | Tiny, Promise-based |
 | Worker framework | Hono | ^4.6 | Tiny, ergonomic routing |
 | Worker runtime | Cloudflare Workers | — | Free tier, KV cache |
@@ -167,6 +156,7 @@ type WalletSummary = {
   chain: string
   totalUsd: number
   holdings: Array<{
+    coinId?: string  // CoinStats slug for the deep-link (coinstats.app/coins/{coinId}); absent if un-indexed
     symbol: string
     name: string
     imgUrl: string
@@ -193,7 +183,13 @@ Returns `{ ok: true, version: string }`. No auth, no rate limit.
 | KV `CACHE` | `token:{coinId}` | 60 seconds | Price moves |
 | KV `CACHE` | `chart:{coinId}` | 900 seconds | 7d sparkline is hourly data; cached apart from `token` so a flaky chart call can't pin a blank sparkline, and to cut the ~3-credit chart cost |
 | KV `CACHE` | `wallet:{chain}:{addr}` | 300 seconds | Balances change but slowly |
-| CF edge cache | full URL | 60 seconds | Free, shared globally |
+
+> The Worker sends `Cache-Control: public, max-age=…` on `/v1/lookup` and `/v1/fear-greed`
+> responses (a hint for the browser / service-worker HTTP cache). There is intentionally
+> **no Cloudflare edge-cache layer**: on `workers.dev` a header alone doesn't populate the
+> edge cache (the Worker makes no Cache API call), and it would be redundant — the KV layer
+> above already collapses repeat lookups across users, and the extension's IndexedDB cache
+> handles per-user repeats.
 
 ### Rate limiting
 
@@ -354,10 +350,12 @@ For v0.1 on X only, there's no URL context. Inference order:
 ### Background service worker behavior
 
 - Maintains an IndexedDB cache via `idb`: `alphapeek-cache` DB, store `lookups`, key = `${chain}:${addr}`.
-- TTLs (mirror Worker, slightly longer):
-  - kind: 7 days
+- TTLs are keyed by the cached result's `kind` (sit just above the Worker's so repeat
+  hovers don't re-hit the network; mirror the retention quoted in the privacy policy):
   - token: 90 seconds
   - wallet: 10 minutes
+  - unknown: 60 minutes
+  (There is no client-side "kind" TTL — kind resolution is the Worker's 30-day KV layer.)
 - On message `LOOKUP { addr, chain }`:
   1. Check IndexedDB — hit + not expired → return immediately
   2. Miss/expired → `fetch(WORKER_URL + '/v1/lookup?...')`
@@ -425,6 +423,7 @@ export type WalletSummary = {
   chain: Chain
   totalUsd: number
   holdings: Array<{
+    coinId?: string  // CoinStats slug → coinstats.app/coins/{coinId}; absent if un-indexed
     symbol: string
     name: string
     imgUrl: string

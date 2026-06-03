@@ -18,71 +18,56 @@ mouse leaves card     →  card dismisses                          100ms
 - **100ms grace period** — allows user to move mouse from address to card without it disappearing
 - **No animation longer than 150ms** — feels snappy, not sluggish
 
-## 2. Visual design tokens
+## 2. Visual design tokens — "Terminal" system
 
-Centralize these in `tailwind.config.ts` as theme extensions, and reuse everywhere.
+A neo-brutalist mono desk with an electric-lime accent. Tokens are **CSS variables** defined in
+`apps/extension/src/shadow/tokens.css` and exposed to Tailwind via semantic names in
+`tailwind.config.ts` (`bg`, `surface`, `fg`, `dim`, `line`, `acc`, `acc-ink`, `up`, `down`, `warn`,
+`seg-1..5`). **Light is the default; a single `.dark` class on the `.ap-root` wrapper flips every
+variable** — there are no Tailwind `dark:` variants. Theme is chosen in `shadow/mount.ts` (hover
+card, follows X's theme) and `popup/App.tsx` (popup, follows OS `prefers-color-scheme`).
 
 ### Colors
 
-```ts
-// Light mode (X light theme)
-neutral: {
-  50:  '#FAFAFA',  // card background
-  100: '#F4F4F5',  // subtle divider
-  500: '#71717A',  // secondary text
-  900: '#18181B',  // primary text
-}
-
-// Dark mode (X dark theme — detect via prefers-color-scheme inside iframe? Actually use a CSS media query inside the shadow root)
-neutral-dark: {
-  50:  '#18181B',
-  100: '#27272A',
-  500: '#A1A1AA',
-  900: '#FAFAFA',
-}
-
-// Semantic
-success: '#10B981'  // green — positive PnL, safe risk score
-warning: '#F59E0B'  // amber — caution, mid risk
-danger:  '#EF4444'  // red — losses, high risk
-accent:  '#6366F1'  // indigo — brand accent, links, focus
+```
+token        light        dark         use
+────────────────────────────────────────────────────────────────────
+bg           #ecebe3      #0d0d0d      page/feed backdrop, row hover fills
+surface      #ffffff      #141414      card surface
+fg           #0d0d0d      #f2f2f2      primary text
+dim          #6b6b6b      #8a8a8a      secondary text / micro-labels
+line         #0d0d0d      #353535      hairline rules + 1.5px borders
+acc          #aad400      #c6f432      electric-lime accent (brand, links, gains)
+acc-ink      #0d0d0d      #0d0d0d      text on accent fills
+up / down    #aad400 / #d62b2b   #c6f432 / #ff4d4d   gains / losses
+warn         #b46b00      #ffb627      caution (amber) — flag badges
+shadow       5px 5px 0 #0d0d0d        5px 5px 0 rgba(198,244,50,.18)
+seg-1..5     acc, #1a1a1a, #6b6b6b, #a3a3a3, #d0d0d0  (dark: acc, #e6e6e6, #8a8a8a, #565656, #383838)
 ```
 
-Use Tailwind's `dark:` variant inside the Shadow DOM. Detect dark mode by inspecting `document.documentElement` for X's `data-theme` attribute or `prefers-color-scheme`.
+`seg-1..5` is the allocation-bar ramp (largest → smallest holding). Gains/losses use accent-lime for
+up and red for down — **not** the conventional green; this is intentional brand.
 
 ### Typography
 
-```ts
-fontFamily: {
-  sans: ['Inter', 'system-ui', 'sans-serif'],
-  mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
-}
-fontSize: {
-  xs:   '11px',   // micro labels, FDV, vol secondaries
-  sm:   '13px',   // most body text
-  base: '14px',   // primary readable
-  lg:   '16px',   // token name, big numbers
-  xl:   '20px',   // total balance, price (hero)
-}
-```
+- **Mono everywhere:** `Space Mono`, falling back to `ui-monospace, SFMono-Regular, Menlo, monospace`.
+  System-loaded — no font file is shipped.
+- Sizes are set as **explicit px** per element (e.g. `text-[9px]` micro-labels … `text-[30px]` hero
+  balance), not a named scale — the terminal look relies on tight, deliberate sizing.
 
-Use system fonts as fallback — don't ship Inter as a font file (bundle size). It usually renders if user has it; falls back gracefully if not.
+### Borders, shape & shadow
 
-### Spacing
-
-```ts
-// Tailwind defaults are fine. Card uses:
-padding: 'p-4'           // 16px
-gap: 'gap-2' or 'gap-3'  // 8px or 12px
-border-radius: 'rounded-xl'  // 12px
-```
+- **Borders:** `1.5px solid` in `line`. Hairline dividers between sections and rows.
+- **Corners:** square — **no border-radius** anywhere (neo-brutalist).
+- **Shadow:** one hard **offset** shadow per card (`shadow-tm` = `5px 5px 0`), no blur — ink on light,
+  lime-tinted on dark.
 
 ### Card dimensions
 
-- **Width:** 320px (fixed)
-- **Max height:** 480px (scrollable if exceeded, rare)
-- **Shadow:** `shadow-lg` (`0 10px 15px -3px rgb(0 0 0 / 0.1)`)
-- **Border:** 1px solid `neutral-100` (light), `neutral-900` (dark) — gives subtle definition
+- **Width:** 320px (`w-card`); **popup:** 360px.
+- **Max height:** 480px (`max-h-card`), scrollable if exceeded.
+- **Transitions:** 120ms (`duration-tm`). Loading uses a **blinking caret** (`ap-blink`, gated behind
+  `motion-safe`), not a spinner. No animation longer than 150ms.
 
 ## 3. Card layouts
 
@@ -96,7 +81,7 @@ border-radius: 'rounded-xl'  // 12px
 └────────────────────────────────────┘
 ```
 
-Single spinner icon (lucide `Loader2`, spin animation), centered. Card height ~60px during loading. Card grows in place when data arrives.
+A blinking caret (`ap-blink`, gated behind `motion-safe`), centered — no spinner. Card height ~60px during loading; it grows in place when data arrives.
 
 ### B. Token card (contract address)
 
@@ -118,11 +103,11 @@ Single spinner icon (lucide `Loader2`, spin animation), centered. Card height ~6
 
 - **Token icon:** 32px circle, fallback to gray circle with first letter of symbol if `imgUrl` fails
 - **Price:** right-aligned, large (`text-xl`), bold
-- **24h change:** colored green/red, arrow icon (lucide `TrendingUp` / `TrendingDown`)
+- **24h change:** colored with `up` (accent-lime) / `down` (red) — note up is lime, not green (brand)
 - **Flag badges (`TokenSummary.flags`):** soft amber pills for `low_liquidity` (24h vol < $50k) and
   `high_volatility` (|24h| ≥ 25%) — derived from market data only. **NOT a safety verdict** — true
   token-risk (honeypot/ownership) is deferred to v0.2. Render nothing when `flags` is empty.
-- **Sparkline:** SVG, neutral gray stroke 2px, no fill, no axes, no labels. Just the shape. Min/max from data, no padding.
+- **Sparkline:** SVG, **accent-lime** (`acc`) stroke 2px, no fill, no axes, no labels. Just the shape. Min/max from data, no padding. Icons throughout the card are hand-rolled inline SVG (`components/icons.tsx`), not an icon font.
 - **Footer links:** open in new tab. Use `target="_blank"` + `rel="noopener noreferrer"`.
 
 ### C. Wallet card
@@ -148,13 +133,13 @@ Single spinner icon (lucide `Loader2`, spin animation), centered. Card height ~6
 ```
 
 - **Address:** truncated to `0x1234…abcd` (first 6 + ellipsis + last 4)
-- **Copy button:** lucide `Copy` icon. On click: copy full address to clipboard + brief toast inside card "Copied!"
+- **Copy button:** a `Copy` text button. On click: copy full address to clipboard + the button briefly flips to "Copied" (accent fill).
 - **Stablecoin % (`WalletSummary.stablecoinPct`):** "risk-on vs parked" signal, computed worker-side
   over the FULL holdings (before the top-5 slice), so it's accurate even when stables fall outside
   the shown rows. Shown next to "Total Balance".
 - **Allocation bar:** thin stacked bar, one value-neutral colored segment per top holding (width =
   `pct`); the uncovered remainder of the track reads as "other". Purely visual — no green/red.
-- **Holdings rows:** icon (24px) + symbol + percentage + USD. Hover row for slight bg highlight.
+- **Holdings rows:** symbol + percentage + USD (no token icon in v0.1). Row hover → slight `bg` highlight. Each row **deep-links to `coinstats.app/coins/{coinId}`** (new tab) when the holding has a CoinStats id, with a hover-revealed ↗; rows without an id stay non-clickable.
 - **Total balance:** `Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })`
 
 Note: v0.1 wallet card **does not show PnL** because the PnL endpoint costs additional credits per call and we want to keep wallet lookups at 40 credits, not 80+. Add PnL in v0.2 with a deliberate UX decision (e.g., fetch on click-to-expand only).

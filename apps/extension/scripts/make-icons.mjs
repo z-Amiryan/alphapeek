@@ -1,11 +1,15 @@
 /**
- * Generates the extension's PNG icons (16/48/128) into `public/` with no
+ * Generates the extension's PNG icons (16/48/128) into `src/public/` with no
  * external dependencies — just Node's built-in `zlib`. Chrome's toolbar needs
- * raster icons, so we render the brand mark (electric-lime tile + an ink
- * stepped-sparkline glyph) directly to RGBA pixels and encode a PNG by hand.
+ * raster icons, so we render the brand mark (a lime data-card on an ink field
+ * with an ink stepped-sparkline glyph) directly to RGBA pixels and encode a PNG
+ * by hand.
  *
- * Run: `node scripts/make-icons.mjs` (or `pnpm icons`).
- * AGENT: keep this in sync with public/icon.svg, the human-editable source.
+ * The 48/128 icons render the full offset two-card motif; the 16px badge uses a
+ * simplified single-card variant (the offset + 6-step sparkline turn to mush at
+ * that size). Run: `node scripts/make-icons.mjs` (or `pnpm icons`).
+ * AGENT: keep the full motif in sync with src/public/icon.svg, the human-editable
+ * source.
  */
 import { deflateSync } from 'node:zlib'
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -13,16 +17,19 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const OUT_DIR = join(__dirname, '..', 'public')
+const OUT_DIR = join(__dirname, '..', 'src', 'public')
 
 const LIME = [0xc6, 0xf4, 0x32] // #c6f432
 const INK = [0x0d, 0x0d, 0x0d] // #0d0d0d
-const SIZES = [16, 48, 128]
+// 32 is the retina (2×) toolbar size — without it Chrome scales the 48px full
+// motif down to the badge slot, undoing the simplified variant on 2× displays.
+const SIZES = [16, 32, 48, 128]
 
-// Offset "data card" motif + inner stepped sparkline, in the icon.svg 40-unit
-// space. The ink shadow-card sits behind a lime front-card (ink border); the
-// sparkline lives inside the front-card. Keep these in sync with icon.svg.
-const SHADOW_CARD = { x: 13, y: 13, w: 20, h: 20 }
+// Full motif (48/128) — offset "data card" + inner stepped sparkline, in the
+// icon.svg 40-unit space. On the ink field: a lime-outlined card peeks out
+// behind a solid lime front-card; an ink sparkline lives inside the front-card.
+// Keep these in sync with icon.svg.
+const BACK_CARD = { x: 13, y: 13, w: 20, h: 20 }
 const FRONT_CARD = { x: 7, y: 7, w: 20, h: 20 }
 const CARD_STROKE = 2.2
 const GLYPH_PTS = [
@@ -35,6 +42,18 @@ const GLYPH_PTS = [
   [21, 12.5],
 ]
 const GLYPH_STROKE = 2
+
+// Simplified badge variant (≤32px) — a single centered lime card (no offset)
+// with a bolder 2-step sparkline. The full motif's offset edge and 6-step glyph
+// collapse to noise at badge size, so we trade detail for legibility.
+const MINI_CARD = { x: 9, y: 9, w: 22, h: 22 }
+const MINI_GLYPH_PTS = [
+  [13, 26],
+  [18, 19],
+  [22, 23],
+  [27, 14],
+]
+const MINI_GLYPH_STROKE = 2.6
 
 /** CRC32 (PNG chunk checksum). */
 const CRC_TABLE = (() => {
@@ -88,9 +107,11 @@ function renderPixels(size) {
   const s = size
   const px = new Uint8Array(s * s * 4) // RGBA
   const k = s / 40 // design units → pixels
-  const glyphHalf = (GLYPH_STROKE * k) / 2
+  const mini = size <= 32
+  const card = mini ? MINI_CARD : FRONT_CARD
+  const glyphHalf = ((mini ? MINI_GLYPH_STROKE : GLYPH_STROKE) * k) / 2
   const cardHalf = (CARD_STROKE * k) / 2
-  const pts = GLYPH_PTS.map(([x, y]) => [x * k, y * k])
+  const pts = (mini ? MINI_GLYPH_PTS : GLYPH_PTS).map(([x, y]) => [x * k, y * k])
 
   for (let y = 0; y < s; y++) {
     for (let x = 0; x < s; x++) {
@@ -98,13 +119,12 @@ function renderPixels(size) {
       const cx = x + 0.5
       const cy = y + 0.5
 
-      // Paint order mirrors the SVG: lime tile → ink shadow-card → lime
-      // front-card face (covers the shadow) → ink front-card border → ink
-      // sparkline.
-      let rgb = LIME
-      if (inRect(cx, cy, SHADOW_CARD, k)) rgb = INK
-      if (inRect(cx, cy, FRONT_CARD, k)) rgb = LIME
-      if (distToRectOutline(cx, cy, FRONT_CARD, k) <= cardHalf) rgb = INK
+      // Paint order mirrors the SVG: ink field → lime back-card outline (full
+      // motif only) → solid lime front-card face (covers the back-card overlap)
+      // → ink sparkline.
+      let rgb = INK
+      if (!mini && distToRectOutline(cx, cy, BACK_CARD, k) <= cardHalf) rgb = LIME
+      if (inRect(cx, cy, card, k)) rgb = LIME
       for (let seg = 0; seg < pts.length - 1; seg++) {
         const d = distToSegment(cx, cy, pts[seg][0], pts[seg][1], pts[seg + 1][0], pts[seg + 1][1])
         if (d <= glyphHalf) {

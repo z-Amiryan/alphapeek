@@ -2,6 +2,11 @@
 node_modules/
 .pnpm-store/
 
+# This is a pnpm-only workspace (see packageManager in package.json). A stray
+# npm/yarn lockfile splits the dependency source of truth and confuses CI.
+package-lock.json
+yarn.lock
+
 # Build output
 dist/
 .output/

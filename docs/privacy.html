@@ -97,8 +97,8 @@
   <h2>Local storage on your device</h2>
   <p>AlphaPeek uses two browser storage mechanisms:</p>
   <ul>
-    <li><strong>IndexedDB</strong> &mdash; caches address lookup results for a short period (90 seconds for tokens, 10 minutes for wallets) to reduce network requests.</li>
-    <li><strong><code>chrome.storage.local</code></strong> &mdash; stores your settings (default chain, recent lookups list).</li>
+    <li><strong>IndexedDB</strong> &mdash; caches address lookup results for a short period (90 seconds for tokens, 10 minutes for wallets, 1 hour for unindexed addresses) to reduce network requests. This same cache also powers the popup&rsquo;s &ldquo;recent lookups&rdquo; list.</li>
+    <li><strong><code>chrome.storage.local</code></strong> &mdash; stores your settings (your default chain).</li>
   </ul>
   <p>You can clear both at any time by removing the extension or via Chrome&rsquo;s &ldquo;Clear browsing data &rarr; Cookies and site data.&rdquo;</p>
 

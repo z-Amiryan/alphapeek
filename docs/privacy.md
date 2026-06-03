@@ -34,8 +34,8 @@ When AlphaPeek looks up an address, it sends that address to the [CoinStats Publ
 ## Local storage on your device
 
 AlphaPeek uses two browser storage mechanisms:
-- **IndexedDB** — caches address lookup results for a short period (90 seconds for tokens, 10 minutes for wallets) to reduce network requests.
-- **`chrome.storage.local`** — stores your settings (default chain, recent lookups list).
+- **IndexedDB** — caches address lookup results for a short period (90 seconds for tokens, 10 minutes for wallets, 1 hour for unindexed addresses) to reduce network requests. This same cache also powers the popup's "recent lookups" list.
+- **`chrome.storage.local`** — stores your settings (your default chain).
 
 You can clear both at any time by removing the extension or via Chrome's "Clear browsing data → Cookies and site data."
 

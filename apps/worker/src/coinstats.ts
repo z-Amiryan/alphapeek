@@ -202,14 +202,32 @@ export function normalizeChart(payload: unknown): number[] {
   return out
 }
 
-export async function fetchToken(env: Env, coinId: string): Promise<TokenSummary> {
-  const [details, chart] = await Promise.all([
-    cs(env, `/coins/${encodeURIComponent(coinId)}`, {}),
-    // Correct endpoint is `/coins/charts?coinIds=…` (plural); the per-coin `/coins/{id}/charts`
-    // path 404s and was being swallowed by the catch, yielding an empty sparkline.
-    cs(env, '/coins/charts', { coinIds: coinId, period: '1w' }).catch(() => null),
-  ])
-  return normalizeToken(coinId, details, normalizeChart(chart))
+// Token detail WITHOUT the chart — the sparkline is fetched and cached separately
+// (see fetchChart + index.ts) so a flaky chart call can't pin an empty sparkline on
+// the whole token entry for the token TTL.
+export async function fetchTokenDetail(env: Env, coinId: string): Promise<TokenSummary> {
+  const details = await cs(env, `/coins/${encodeURIComponent(coinId)}`, {})
+  return normalizeToken(coinId, details, [])
+}
+
+// Best-effort 7-day sparkline. Returns `null` on failure OR an empty result so the
+// cache layer (which never stores `null`) retries on the next request instead of
+// caching a blank chart — while a real chart gets cached on its own longer TTL.
+// Correct endpoint is `/coins/charts?coinIds=…` (plural); the per-coin
+// `/coins/{id}/charts` path 404s.
+export async function fetchChart(env: Env, coinId: string): Promise<number[] | null> {
+  // Log before swallowing so a credit storm / expired key (401) / 429 is visible in
+  // Workers observability — degradation is intentional, silence is not. console.warn
+  // (not .log) is allowed by Biome and is the Workers-runtime way to reach logs.
+  const payload = await cs(env, '/coins/charts', { coinIds: coinId, period: '1w' }).catch(
+    (err: unknown) => {
+      console.warn(`chart fetch failed for ${coinId}: ${String(err)}`)
+      return null
+    },
+  )
+  if (payload === null) return null
+  const points = normalizeChart(payload)
+  return points.length > 0 ? points : null
 }
 
 export function normalizeWallet(addr: string, chain: Chain, payload: unknown): WalletSummary {
@@ -225,7 +243,10 @@ export function normalizeWallet(addr: string, chain: Chain, payload: unknown): W
     const price = pickNumber(meta, 'price', 'priceUsd')
     const usd = pickNumber(meta, 'usd', 'balanceUSD', 'valueUsd') || amount * price
     if (usd <= 0) continue
+    const coinId = pickString(meta, 'coinId', 'id')
     holdings.push({
+      // Omit when absent so the client can branch on its presence (`coinId?`).
+      ...(coinId ? { coinId } : {}),
       symbol: pickString(meta, 'symbol').toUpperCase(),
       name: pickString(meta, 'name'),
       imgUrl: pickString(meta, 'imgUrl', 'icon', 'image'),

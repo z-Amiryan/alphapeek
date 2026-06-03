@@ -16,6 +16,11 @@ const HOVER_DELAY = 200
 const DISMISS_GRACE = 100
 const UNDERLINE_CLASS = 'alphapeek-hover'
 const STYLE_ID = 'alphapeek-underline-style'
+// Brand-lime underline, mirroring --ap-acc in shadow/tokens.css. The page is
+// outside our shadow root, so we drive the color via a CSS var set per-hover
+// from the detected X theme (light vs dim/lights-out) instead of reading --ap-acc.
+const UNDERLINE_VAR = '--alphapeek-acc'
+const ACCENT_BY_THEME = { light: '#aad400', dark: '#c6f432' } as const
 
 export default defineContentScript({
   matches: ['https://x.com/*', 'https://twitter.com/*'],
@@ -142,6 +147,7 @@ export default defineContentScript({
       if (anchor !== activeAnchor) {
         reset()
         activeAnchor = anchor
+        document.documentElement.style.setProperty(UNDERLINE_VAR, ACCENT_BY_THEME[detectTheme()])
         anchor.classList.add(UNDERLINE_CLASS)
         anchor.addEventListener('mouseleave', onAnchorLeave)
       }
@@ -208,7 +214,7 @@ function ensureUnderlineStyle(): void {
   if (document.getElementById(STYLE_ID)) return
   const style = document.createElement('style')
   style.id = STYLE_ID
-  style.textContent = `.${UNDERLINE_CLASS}{border-bottom:1px dotted currentColor;cursor:help;}`
+  style.textContent = `.${UNDERLINE_CLASS}{border-bottom:1px dotted var(${UNDERLINE_VAR},${ACCENT_BY_THEME.dark});cursor:help;}`
   document.head.appendChild(style)
 }
 

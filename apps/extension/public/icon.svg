@@ -1,7 +1,0 @@
-<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
-  <!-- AlphaPeek brand mark: indigo tile + magnifier "lens" over a chain link. -->
-  <rect width="128" height="128" rx="28" fill="#6366F1" />
-  <circle cx="54" cy="54" r="26" fill="none" stroke="#FFFFFF" stroke-width="8" />
-  <line x1="73" y1="73" x2="98" y2="98" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" />
-  <circle cx="54" cy="54" r="9" fill="#FFFFFF" />
-</svg>

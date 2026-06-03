@@ -8,11 +8,11 @@ compatibility_flags = ["nodejs_compat"]
 #   npx wrangler kv namespace create RATELIMIT
 [[kv_namespaces]]
 binding = "CACHE"
-id = "REPLACE_ME"
+id = "490f6d8fcb7f47fc89b1d828c10491b8"
 
 [[kv_namespaces]]
 binding = "RATELIMIT"
-id = "REPLACE_ME"
+id = "0b8e626966324c81801f5616a5a4e8a0"
 
 [vars]
 # Caps total /v1/lookup requests per UTC day (counts every request, including KV
@@ -23,3 +23,6 @@ COINSTATS_BASE_URL = "https://openapiv1.coinstats.app"
 
 # Secret (never commit) — set with:
 #   npx wrangler secret put COINSTATS_API_KEY
+
+[observability]
+enabled = true

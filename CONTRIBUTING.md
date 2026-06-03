@@ -26,8 +26,16 @@ pnpm -C apps/extension build                               # load .output/chrome
 
 > **Run your own Worker.** AlphaPeek is designed so the extension talks to *your*
 > Worker holding *your* CoinStats key. Forks must deploy their own Worker and point
-> `VITE_WORKER_URL` at it — never commit a key, and never rely on someone else's
-> proxy (it spends their credits). See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) §11.
+> `VITE_WORKER_URL` (in `apps/extension/.env`) at it — never commit a key, and never
+> rely on someone else's proxy (it spends their credits). See
+> [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) §11.
+>
+> **Gotcha — the Worker host lives in two places.** Besides `VITE_WORKER_URL` (the
+> fetch target), the manifest CSP allowlist is set separately via `connect-src` in
+> [`apps/extension/wxt.config.ts`](apps/extension/wxt.config.ts). A **production**
+> build pointed at your own Worker is silently CSP-blocked until you update the host
+> there too. Local dev against `http://localhost:8787` already works — the dev-mode
+> CSP allows it.
 
 ## Scope
 

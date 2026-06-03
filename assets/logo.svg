@@ -1,0 +1,10 @@
+<svg width="120" height="120" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="AlphaPeek">
+  <!-- AlphaPeek brand mark: the offset "data card" motif (an ink shadow-card
+       behind a lime card) with an ink stepped-sparkline inside — the wallet/token
+       card you peek, trending up. Static variant. Keep the glyph in sync with
+       apps/extension/public/icon.svg. -->
+  <rect width="40" height="40" fill="#c6f432" />
+  <rect x="13" y="13" width="20" height="20" fill="#0d0d0d" />
+  <rect x="7" y="7" width="20" height="20" fill="#c6f432" stroke="#0d0d0d" stroke-width="2.2" />
+  <path d="M10.5 21 H14 V16.5 H17.5 V18.5 H21 V12.5" fill="none" stroke="#0d0d0d" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" />
+</svg>

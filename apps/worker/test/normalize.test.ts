@@ -25,8 +25,8 @@ describe('normalizeWallet', () => {
   it('computes totals, percentages, sorts desc and caps at 5', () => {
     const payload = {
       balances: [
-        { symbol: 'eth', name: 'Ethereum', amount: 10, coin: { price: 2000 } }, // 20000
-        { symbol: 'usdc', name: 'USD Coin', usd: 8000 },
+        { symbol: 'eth', name: 'Ethereum', amount: 10, coinId: 'ethereum', coin: { price: 2000 } }, // 20000
+        { symbol: 'usdc', name: 'USD Coin', usd: 8000 }, // no coinId → stays undefined
         { symbol: 'link', name: 'Chainlink', balanceUSD: 4000 },
         { symbol: 'dai', name: 'Dai', valueUsd: 2000 },
         { symbol: 'aave', name: 'Aave', usd: 1000 },
@@ -37,6 +37,9 @@ describe('normalizeWallet', () => {
     const w = normalizeWallet('0xabc', 'ethereum', payload)
     expect(w.holdings).toHaveLength(5)
     expect(w.holdings[0]?.symbol).toBe('ETH')
+    // coinId carries through for deep-linking; absent when upstream omits it.
+    expect(w.holdings[0]?.coinId).toBe('ethereum')
+    expect(w.holdings[1]?.coinId).toBeUndefined()
     expect(w.totalUsd).toBe(35500)
     // ETH share = 20000 / 35500
     expect(Math.round(w.holdings[0]?.pct ?? 0)).toBe(56)

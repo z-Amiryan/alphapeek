@@ -1,10 +1,12 @@
 // Popup manual lookup (UX §7): renders the same card body as the hover, via the
 // background SW so it shares the cache.
-import { type Chain, CHAIN_LABELS, SUPPORTED_CHAINS } from '@alphapeek/shared'
+import type { Chain } from '@alphapeek/shared'
 import { useState } from 'react'
 import { isAddress } from '@/lib/regex'
 import { requestLookup } from '@/services/messaging'
+import { ChainSelect } from './ChainSelect'
 import { type LookupState, ResultView } from './ResultView'
+import { BTN_SOLID, LABEL } from './ui'
 
 type Props = {
   defaultChain: Chain
@@ -31,7 +33,7 @@ export function ManualLookup({ defaultChain, onLookupComplete }: Props) {
 
   return (
     <div>
-      <label htmlFor="cl-addr" className="mb-1 block text-sm font-medium">
+      <label htmlFor="cl-addr" className={`mb-2 ${LABEL}`}>
         Look up an address
       </label>
       <input
@@ -42,37 +44,26 @@ export function ManualLookup({ defaultChain, onLookupComplete }: Props) {
         onKeyDown={(e) => {
           if (e.key === 'Enter') void run()
         }}
-        placeholder="0x…"
+        placeholder="0x… or token contract"
         spellCheck={false}
         autoComplete="off"
-        className="w-full rounded-lg border border-neutral-100 bg-neutral-50 px-2 py-1.5 font-mono text-sm text-neutral-900 outline-none focus:border-accent dark:border-surface-dark-100 dark:bg-surface-dark dark:text-neutral-50"
+        className="h-[38px] w-full border-[1.5px] border-line bg-bg px-[11px] text-[13px] font-bold text-fg outline-none transition-colors duration-tm placeholder:font-normal placeholder:text-dim focus:border-acc"
       />
 
-      <div className="mt-2 flex items-center gap-2">
-        <select
-          aria-label="Chain"
-          value={chain}
-          onChange={(e) => setChain(e.target.value as Chain)}
-          className="rounded-lg border border-neutral-100 bg-neutral-50 px-2 py-1.5 text-sm text-neutral-900 dark:border-surface-dark-100 dark:bg-surface-dark dark:text-neutral-50"
-        >
-          {SUPPORTED_CHAINS.map((c) => (
-            <option key={c} value={c}>
-              {CHAIN_LABELS[c]}
-            </option>
-          ))}
-        </select>
+      <div className="mt-2 flex gap-2">
+        <ChainSelect ariaLabel="Chain" value={chain} onChange={setChain} />
         <button
           type="button"
           onClick={() => void run()}
           disabled={state.status === 'loading'}
-          className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+          className={`${BTN_SOLID} h-[38px] py-0 disabled:opacity-50`}
         >
-          Look up
+          Look Up
         </button>
       </div>
 
       {state.status !== 'idle' ? (
-        <div className="mt-3 overflow-hidden rounded-xl border border-neutral-100 dark:border-surface-dark-100">
+        <div className="mt-3 border-[1.5px] border-line bg-surface">
           <ResultView state={state} addr={normalized} chain={chain} onRetry={() => void run()} />
         </div>
       ) : null}

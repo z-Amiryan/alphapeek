@@ -1,0 +1,528 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap");
+@import "../../extension/src/shadow/tokens.css";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* =============================================================================
+   AlphaPeek — Chrome Web Store visuals. The cards themselves are the REAL
+   extension components (TokenView / WalletView) wrapped in the production CARD
+   class; everything below is export-only scaffolding (browser frame, faux-X
+   feed, captions, promo lockups) rendered at exact px for capture.
+   ============================================================================= */
+body {
+  margin: 0;
+  background: #cfcdc4;
+}
+.gallery {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 44px;
+  padding: 48px 24px 96px;
+  font-family: "Space Mono", ui-monospace, monospace;
+}
+.asset-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.asset-label {
+  font-family: "Space Mono", ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #6b6b6b;
+}
+.asset-label b {
+  color: #0d0d0d;
+}
+.asset {
+  position: relative;
+  overflow: hidden;
+  font-family: "Space Mono", ui-monospace, monospace;
+}
+
+/* shared ink backdrop + faint lime grid */
+.bg-ink {
+  background: repeating-linear-gradient(0deg, rgba(198, 244, 50, 0.045) 0 1px, transparent 1px 64px),
+    repeating-linear-gradient(90deg, rgba(198, 244, 50, 0.045) 0 1px, transparent 1px 64px), #0d0d0d;
+}
+
+/* ---- promo screenshot (1280×800) ------------------------------------------ */
+.shot {
+  width: 1280px;
+  height: 800px;
+  box-sizing: border-box;
+  color: #f2f2f2;
+  display: flex;
+  flex-direction: column;
+  padding: 52px 56px 48px;
+}
+.shot-cap {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.shot-cap-mark {
+  width: 30px;
+  height: 30px;
+  background: #c6f432;
+  flex-shrink: 0;
+  margin-top: 6px;
+  position: relative;
+}
+.shot-cap-mark::after {
+  content: "";
+  position: absolute;
+  inset: 9px;
+  background: #0d0d0d;
+}
+.shot-h {
+  margin: 0;
+  font-size: 46px;
+  font-weight: 700;
+  line-height: 1.04;
+  letter-spacing: -0.01em;
+}
+.shot-h .em {
+  color: #c6f432;
+}
+.shot-sub {
+  margin: 10px 0 0;
+  font-size: 16px;
+  color: #8a8a8a;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+  max-width: 60ch;
+}
+.shot-stage {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 28px;
+  min-height: 0;
+}
+
+/* ---- browser frame -------------------------------------------------------- */
+.bw {
+  border: 1.5px solid #353535;
+  background: #141414;
+  box-shadow: 10px 10px 0 rgba(198, 244, 50, 0.16);
+  display: flex;
+  flex-direction: column;
+}
+.bw-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 44px;
+  padding: 0 16px;
+  background: #1c1c1c;
+  border-bottom: 1.5px solid #353535;
+  flex-shrink: 0;
+}
+.bw-dots {
+  display: flex;
+  gap: 8px;
+}
+.bw-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #3a3a3a;
+}
+.bw-url {
+  flex: 1;
+  max-width: 420px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  background: #0d0d0d;
+  border: 1.5px solid #353535;
+  font-size: 12px;
+  color: #8a8a8a;
+  letter-spacing: 0.02em;
+}
+.bw-url .lock {
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid #6b6b6b;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  margin-right: 1px;
+}
+.bw-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+.bw-ext {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #353535;
+}
+.bw-ext .puzzle {
+  width: 13px;
+  height: 13px;
+  color: #8a8a8a;
+}
+.bw-ext.live {
+  border-color: #c6f432;
+}
+.bw-ext-mark {
+  width: 14px;
+  height: 14px;
+  background: #c6f432;
+  position: relative;
+}
+.bw-ext-mark::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  background: #1c1c1c;
+}
+.bw-body {
+  position: relative;
+  overflow: hidden;
+}
+
+/* ---- X feed scene (dark default) ------------------------------------------ */
+.sc {
+  width: 100%;
+  height: 100%;
+  background: #000;
+  position: relative;
+  overflow: hidden;
+}
+.sc-tabs {
+  display: flex;
+  border-bottom: 1px solid #2f3336;
+  height: 50px;
+}
+.sc-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: -apple-system, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: #71767b;
+  position: relative;
+}
+.sc-tab.on {
+  color: #e7e9ea;
+}
+.sc-tab.on::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 56px;
+  height: 4px;
+  border-radius: 2px;
+  background: #c6f432;
+}
+.sc-tweet {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid #2f3336;
+  font-family: -apple-system, system-ui, sans-serif;
+}
+.sc-av {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #4a4a52, #2a2a30);
+}
+.sc-bd {
+  flex: 1;
+  min-width: 0;
+}
+.sc-nr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+}
+.sc-nm {
+  font-weight: 700;
+  color: #e7e9ea;
+}
+.sc-hd {
+  color: #71767b;
+}
+.sc-tx {
+  font-size: 15px;
+  line-height: 1.45;
+  color: #e7e9ea;
+  margin-top: 3px;
+}
+.sc-addr {
+  position: relative;
+  color: #e7e9ea;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+  text-decoration-color: #c6f432;
+}
+/* cued address: lime outline box + corner node, the hover "tell" */
+.sc-addr.cued {
+  outline: 1.5px solid #c6f432;
+  outline-offset: 2px;
+  background: rgba(198, 244, 50, 0.1);
+}
+.sc-addr.cued::after {
+  content: "";
+  position: absolute;
+  left: -4px;
+  bottom: -6px;
+  width: 6px;
+  height: 6px;
+  background: #c6f432;
+}
+.sc-eng {
+  display: flex;
+  gap: 56px;
+  margin-top: 12px;
+  color: #71767b;
+  font-size: 13px;
+}
+.sc-eng span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.sc-ic {
+  width: 16px;
+  height: 16px;
+  border: 1.6px solid #71767b;
+  border-radius: 50%;
+}
+.sc-ic.sq {
+  border-radius: 3px;
+}
+.sc-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+/* X light theme variant — shows AlphaPeek's first-class light mode in the store */
+.sc.light {
+  background: #fff;
+}
+.sc.light .sc-tabs,
+.sc.light .sc-tweet {
+  border-color: #eff3f4;
+}
+.sc.light .sc-tab {
+  color: #536471;
+}
+.sc.light .sc-tab.on {
+  color: #0f1419;
+}
+.sc.light .sc-nm,
+.sc.light .sc-tx,
+.sc.light .sc-addr {
+  color: #0f1419;
+}
+.sc.light .sc-hd {
+  color: #536471;
+}
+.sc.light .sc-av {
+  background: linear-gradient(135deg, #cfd9de, #aab8c2);
+}
+.sc.light .sc-ic {
+  border-color: #536471;
+}
+
+/* hover connector overlay (address → card) */
+.sc-link {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* floating card anchors inside a scene */
+.sc-card {
+  position: absolute;
+  z-index: 3;
+}
+.sc-pop {
+  position: absolute;
+  z-index: 4;
+}
+
+/* ---- chart feature panel (shot 3) ----------------------------------------- */
+.feat {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+}
+.feat-chart {
+  width: 360px;
+  border: 1.5px solid #353535;
+  background: #141414;
+  box-shadow: 8px 8px 0 rgba(198, 244, 50, 0.16);
+}
+.feat-chart-hd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 14px;
+  border-bottom: 1.5px solid #353535;
+}
+.feat-chart-hd .m {
+  width: 12px;
+  height: 12px;
+  background: #c6f432;
+}
+.feat-chart-hd .t {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #f2f2f2;
+}
+.feat-chart-hd .p {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #c6f432;
+}
+.feat-chart-body {
+  padding: 16px 14px 14px;
+}
+.feat-chart svg {
+  display: block;
+  width: 100%;
+  height: 132px;
+}
+.feat-chart-ax {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 11px;
+  color: #8a8a8a;
+  letter-spacing: 0.04em;
+}
+.feat-chart-ax b {
+  color: #f2f2f2;
+  font-weight: 700;
+}
+
+/* ---- promo tile (440×280) + marquee (1400×560) ---------------------------- */
+.tile {
+  width: 440px;
+  height: 280px;
+  box-sizing: border-box;
+  color: #f2f2f2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  text-align: center;
+}
+.marquee {
+  width: 1400px;
+  height: 560px;
+  box-sizing: border-box;
+  color: #f2f2f2;
+  display: flex;
+  align-items: center;
+  padding: 0 80px;
+  gap: 56px;
+}
+.mq-left {
+  flex: 1;
+}
+.mq-right {
+  flex-shrink: 0;
+  position: relative;
+  width: 560px;
+  height: 100%;
+}
+
+/* logo lockup */
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.logo-mark {
+  background: #c6f432;
+  position: relative;
+  flex-shrink: 0;
+}
+.logo-mark svg {
+  display: block;
+}
+.lm-sm {
+  width: 40px;
+  height: 40px;
+}
+.lm-lg {
+  width: 72px;
+  height: 72px;
+}
+.logo-word {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+.logo-word.lg {
+  font-size: 64px;
+}
+.tagline {
+  font-size: 15px;
+  color: #8a8a8a;
+  letter-spacing: 0.03em;
+  line-height: 1.5;
+}
+.tagline .em {
+  color: #c6f432;
+}
+.tagline.lg {
+  font-size: 26px;
+  line-height: 1.4;
+  max-width: 18ch;
+}
+.tile-rule {
+  width: 44px;
+  height: 3px;
+  background: #c6f432;
+  margin: 18px 0;
+}
+.mq-rule {
+  width: 56px;
+  height: 4px;
+  background: #c6f432;
+  margin: 26px 0;
+}
+.mq-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 30px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #c6f432;
+  border: 1.5px solid #c6f432;
+  padding: 8px 14px;
+}

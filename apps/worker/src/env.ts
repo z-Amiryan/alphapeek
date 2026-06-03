@@ -9,4 +9,4 @@ export type Env = {
 }
 
 // Surfaced at /health; bump on each deploy.
-export const WORKER_VERSION = 'v2026.05.29'
+export const WORKER_VERSION = 'v2026.06.03'

@@ -1,6 +1,6 @@
 # Privacy Policy — AlphaPeek
 
-_Last updated: TBD on first release._
+_Last updated: June 3, 2026._
 
 AlphaPeek is an open-source Chrome extension that shows information about EVM wallet addresses and token contracts when you hover them on supported websites. This document explains what data the extension touches and what it doesn't.
 
@@ -34,8 +34,8 @@ When AlphaPeek looks up an address, it sends that address to the [CoinStats Publ
 ## Local storage on your device
 
 AlphaPeek uses two browser storage mechanisms:
-- **IndexedDB** — caches address lookup results for a short period (90 seconds for tokens, 10 minutes for wallets) to reduce network requests.
-- **`chrome.storage.local`** — stores your settings (default chain, recent lookups list).
+- **IndexedDB** — caches address lookup results for a short period (90 seconds for tokens, 10 minutes for wallets, 1 hour for unindexed addresses) to reduce network requests. This same cache also powers the popup's "recent lookups" list.
+- **`chrome.storage.local`** — stores your settings (your default chain).
 
 You can clear both at any time by removing the extension or via Chrome's "Clear browsing data → Cookies and site data."
 

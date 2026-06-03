@@ -20,3 +20,22 @@ export async function getDefaultChain(): Promise<Chain> {
 export async function setDefaultChain(chain: Chain): Promise<void> {
   await browser.storage.local.set({ [DEFAULT_CHAIN_KEY]: chain })
 }
+
+const SPLASH_SHOWN_KEY = 'splashShownThisSession'
+
+// True only on the first call of a browser session, false thereafter — the popup
+// uses this to show its open splash once per session (UX §7). Backed by
+// `storage.session`, which survives popup closes and service-worker sleeps but is
+// cleared on browser restart. Marks the flag as a side effect so the next open
+// skips the splash.
+export async function shouldShowSplash(): Promise<boolean> {
+  try {
+    const stored = await browser.storage.session.get(SPLASH_SHOWN_KEY)
+    if (stored[SPLASH_SHOWN_KEY] === true) return false
+    await browser.storage.session.set({ [SPLASH_SHOWN_KEY]: true })
+    return true
+  } catch {
+    // If session storage is unavailable, don't gate the popup behind a splash.
+    return false
+  }
+}

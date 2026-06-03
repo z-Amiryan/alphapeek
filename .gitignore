@@ -2,6 +2,11 @@
 node_modules/
 .pnpm-store/
 
+# This is a pnpm-only workspace (see packageManager in package.json). A stray
+# npm/yarn lockfile splits the dependency source of truth and confuses CI.
+package-lock.json
+yarn.lock
+
 # Build output
 dist/
 .output/
@@ -23,6 +28,9 @@ dist/
 
 # Local agent / tooling config (never commit)
 .claude/settings.local.json
+# Throwaway agent worktrees — full repo copies; never commit, and keep Biome/tsc
+# from scanning these stale duplicates (remove with `git worktree remove`).
+.claude/worktrees/
 *.local
 
 # Logs
@@ -32,3 +40,7 @@ pnpm-debug.log*
 
 # Test / coverage
 coverage/
+
+# Generated store-visuals capture output (regenerate via the store-visuals app)
+apps/store-visuals/export/
+.tmp-shots/

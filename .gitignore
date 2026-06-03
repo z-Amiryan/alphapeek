@@ -28,6 +28,9 @@ dist/
 
 # Local agent / tooling config (never commit)
 .claude/settings.local.json
+# Throwaway agent worktrees — full repo copies; never commit, and keep Biome/tsc
+# from scanning these stale duplicates (remove with `git worktree remove`).
+.claude/worktrees/
 *.local
 
 # Logs

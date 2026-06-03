@@ -4,7 +4,7 @@
 import type { Holding, WalletSummary } from '@alphapeek/shared'
 import { CHAIN_LABELS } from '@alphapeek/shared'
 import { useState } from 'react'
-import { explorerAddressUrl, explorerName } from '@/lib/chain'
+import { coinStatsCoinUrl, explorerAddressUrl, explorerName } from '@/lib/chain'
 import { formatShare, formatUsd, truncateAddress } from '@/lib/format'
 import { ArrowOut } from './icons'
 import { BTN } from './ui'
@@ -41,7 +41,7 @@ function HoldingRow({ holding }: { holding: Holding }) {
 
   return (
     <a
-      href={`https://coinstats.app/coins/${holding.coinId}`}
+      href={coinStatsCoinUrl(holding.coinId)}
       target="_blank"
       rel="noopener noreferrer"
       aria-label={`View ${holding.symbol} on CoinStats`}

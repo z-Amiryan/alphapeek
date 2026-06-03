@@ -23,3 +23,6 @@ COINSTATS_BASE_URL = "https://openapiv1.coinstats.app"
 
 # Secret (never commit) — set with:
 #   npx wrangler secret put COINSTATS_API_KEY
+
+[observability]
+enabled = true

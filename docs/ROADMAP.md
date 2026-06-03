@@ -23,7 +23,7 @@ working across both chains; BSC required slug fixes (see SPEC § 4).
 - Card variants: token, wallet, unknown, loading, error
 - Wallet card shows: total balance, top 5 holdings, **allocation bar**, **stablecoin %** (no PnL — v0.2); each holding **deep-links to its CoinStats coin page**
 - Token card shows: price, 24h change, market cap, volume, 7d sparkline, **derived flags** (low-liquidity / high-volatility — market-data hints, not a safety verdict)
-- Popup UI: Fear & Greed, manual address lookup, default chain setting, recent lookups
+- Popup UI: Fear & Greed, manual address lookup, default chain setting, recent lookups, brief branded open splash (see UX § 7)
 - Anonymous (no login, no account)
 - Cloudflare Worker proxy with KV cache + per-IP rate limit + daily cap
 - Unlisted Chrome Web Store beta

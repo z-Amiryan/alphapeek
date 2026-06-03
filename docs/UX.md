@@ -247,3 +247,24 @@ Percentages: 1 decimal place. `+12.4%` (always show sign).
 ```
 
 Width: 360px. Height: auto, max 600px.
+
+### Popup open splash
+
+On the **first popup open of each browser session**, the popup shows a centered branded splash — the
+oversized brand mark drawing in (`ap-logo-line`, 0.9s) over a faint hairline grid, the `ALPHAPEEK`
+wordmark, and an `INITIALIZING` caret — then **fades into the real popup content** (`ap-fade-in`,
+~300ms). Every later open in the same session goes straight to content with no splash and no delay, so
+the popup stays a snappy utility for repeat use. The once-per-session flag lives in `storage.session`
+(survives popup closes and SW sleeps, clears on browser restart — see `shouldShowSplash`).
+
+The splash is an opaque overlay on top of the already-mounted content, so the popup is sized from first
+paint (no resize jump) and the data underneath (Fear & Greed, recent lookups) loads *during* the
+splash. On the session's first open it clears once local settings have loaded **and** a short
+min-splash beat (`POPUP_SPLASH_MS`, default 900ms — roughly one logo-draw) has elapsed, whichever is
+later; it never blocks on the network. While the gate is still being read, a plain surface-colored
+cover holds so content never flashes. Both the logo draw and the fade are gated behind
+`prefers-reduced-motion` — reduced-motion users get the finished mark and an instant cut with no
+movement, while the min-splash beat still applies so nothing flashes.
+
+This brief, once-per-session hold is the one place in the popup we show a deliberate loading state;
+per-hover cards keep the snappy, no-animation-over-150ms rule (§ 1).

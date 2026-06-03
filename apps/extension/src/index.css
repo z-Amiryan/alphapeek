@@ -29,3 +29,12 @@
     stroke-dashoffset: 0;
   }
 }
+
+/* Faint hairline grid backdrop for the popup open splash (UX §7). Drawn on a
+   dedicated low-opacity layer so it never tints foreground content. Uses the
+   theme's line color so it flips with light/dark. */
+.ap-grid-bg {
+  background-image: linear-gradient(to right, var(--ap-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--ap-line) 1px, transparent 1px);
+  background-size: 32px 32px;
+}

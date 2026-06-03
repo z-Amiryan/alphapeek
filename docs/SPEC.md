@@ -50,7 +50,7 @@ alphapeek/
 │   │   │   ├── entrypoints/
 │   │   │   │   ├── content.ts            # Content script (X/Twitter only)
 │   │   │   │   ├── background.ts         # Service worker (IndexedDB cache + Worker fetch)
-│   │   │   │   └── popup/                # index.html, main.tsx, App.tsx
+│   │   │   │   └── popup/                # index.html, main.tsx, App.tsx, Splash.tsx (open splash, UX §7)
 │   │   │   ├── components/               # HoverCard, ResultView, TokenView, WalletView,
 │   │   │   │                             # Sparkline, LoadingView, ErrorView, UnknownView,
 │   │   │   │                             # FearGreedBadge, ManualLookup, RecentLookups,
@@ -365,6 +365,7 @@ For v0.1 on X only, there's no URL context. Inference order:
 ### Popup UI (extension icon click)
 
 Minimal first version:
+- Open splash: a brief branded loading overlay shown on the first open of each browser session (gated by `shouldShowSplash` via `storage.session`), fading into the content once local settings load + a short min-splash beat (UX §7, `Splash.tsx`). Later opens in the same session skip it. No new message types — reuses `FEAR_GREED`.
 - Header: Fear & Greed Index (fetch on open, cache 5min). Use `https://coinstats.app/docs/openapi/fear-and-greed.md` endpoint — same Worker, add a `GET /v1/fear-greed` endpoint.
 - Manual lookup: paste an EVM address + chain selector → renders same hover card layout.
 - Footer: "Default chain" setting (saved to `chrome.storage.local`), version, link to repo.
@@ -474,6 +475,8 @@ If a budget is exceeded after honest effort, document the gap in the PR and deci
 | 8 | Disconnect internet, hover address | Graceful error card, no console errors |
 | 9 | Toggle theme (X dark → light) | Card readable in both modes |
 | 10 | Open X in two tabs, hover same address | Cache shared via background SW |
+| 11 | Click extension icon (first time this browser session) | Brief branded splash, then fades into popup content; reduced-motion shows an instant cut, no flash |
+| 12 | Reopen the popup in the same session | No splash — straight to content, no delay. Splash returns only after a browser restart |
 
 ## 9. Known v0.1 limitations (document in README and roadmap)
 

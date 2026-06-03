@@ -31,10 +31,17 @@ export function ArrowOut({ size = 11 }: IconProps) {
 // reads against the card. The brand hexes are intentionally hard-coded and MUST
 // stay in sync with public/icon.svg and the full-size (48/128) render in
 // scripts/make-icons.mjs. Pass `animated` to draw the sparkline in on mount
-// (used by the popup, which remounts on every open).
-export function LogoMark({ animated = false }: { animated?: boolean }) {
+// (used by the popup, which remounts on every open). `className` sizes the
+// wrapper — the popup open splash (UX §7) renders an oversized mark.
+export function LogoMark({
+  animated = false,
+  className = 'h-[18px] w-[18px]',
+}: {
+  animated?: boolean
+  className?: string
+}) {
   return (
-    <span className="relative inline-flex h-[18px] w-[18px] shrink-0">
+    <span className={`relative inline-flex shrink-0 ${className}`}>
       <svg viewBox="0 0 40 40" className="h-full w-full" aria-hidden="true">
         <rect width="40" height="40" fill="#0d0d0d" />
         <rect

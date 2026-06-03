@@ -1,7 +1,7 @@
-<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
-  <!-- AlphaPeek brand mark: indigo tile + magnifier "lens" over a chain link. -->
-  <rect width="128" height="128" rx="28" fill="#6366F1" />
-  <circle cx="54" cy="54" r="26" fill="none" stroke="#FFFFFF" stroke-width="8" />
-  <line x1="73" y1="73" x2="98" y2="98" stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" />
-  <circle cx="54" cy="54" r="9" fill="#FFFFFF" />
+<svg width="128" height="128" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+  <!-- AlphaPeek brand mark: electric-lime tile + an ink stepped-sparkline glyph
+       whose trailing detached pixel reads as the value being "peeked." -->
+  <rect width="40" height="40" fill="#c6f432" />
+  <path d="M7 25 H13 V19 H19 V22 H25 V13 H33" fill="none" stroke="#0d0d0d" stroke-width="2.6" stroke-linecap="square" stroke-linejoin="miter" />
+  <rect x="31.5" y="11.5" width="3.4" height="3.4" fill="#0d0d0d" />
 </svg>

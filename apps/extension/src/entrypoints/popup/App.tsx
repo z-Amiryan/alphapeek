@@ -4,7 +4,7 @@ import { type Chain, DEFAULT_CHAIN } from '@alphapeek/shared'
 import { useEffect, useState } from 'react'
 import { ChainSelect } from '@/components/ChainSelect'
 import { FearGreedBadge } from '@/components/FearGreedBadge'
-import { ArrowOut } from '@/components/icons'
+import { ArrowOut, LogoMark } from '@/components/icons'
 import { ManualLookup } from '@/components/ManualLookup'
 import { RecentLookups } from '@/components/RecentLookups'
 import { BTN, LABEL } from '@/components/ui'
@@ -54,9 +54,7 @@ export function App() {
     <div className={`ap-root ${dark ? 'dark' : ''}`}>
       <div className="max-h-[600px] w-[360px] overflow-y-auto border-[1.5px] border-line bg-surface font-mono text-fg antialiased">
         <header className="flex items-center gap-[9px] border-b-[1.5px] border-line p-[13px]">
-          <span className="relative h-[18px] w-[18px] shrink-0 bg-acc">
-            <span className="absolute inset-[5px] bg-surface" />
-          </span>
+          <LogoMark />
           <span className="text-[16px] font-bold tracking-[0.02em]">ALPHAPEEK</span>
           <span className="ml-auto text-[10px] font-bold tracking-[0.08em] text-dim">v0.1</span>
         </header>

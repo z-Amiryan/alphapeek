@@ -24,6 +24,27 @@ export function ArrowOut({ size = 11 }: IconProps) {
   )
 }
 
+// AlphaPeek brand mark: electric-lime tile with an ink stepped-sparkline glyph
+// whose trailing detached pixel reads as the value being "peeked." Mirrored by
+// the toolbar icon (public/icon.svg + scripts/make-icons.mjs) — keep in sync.
+export function LogoMark() {
+  return (
+    <span className="relative inline-flex h-[18px] w-[18px] shrink-0 bg-acc text-acc-ink">
+      <svg viewBox="0 0 40 40" className="h-full w-full" aria-hidden="true">
+        <path
+          d="M7 25 H13 V19 H19 V22 H25 V13 H33"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.6"
+          strokeLinecap="square"
+          strokeLinejoin="miter"
+        />
+        <rect x="31.5" y="11.5" width="3.4" height="3.4" fill="currentColor" />
+      </svg>
+    </span>
+  )
+}
+
 // Downward chevron for the custom select control.
 export function Chevron({ size = 13 }: IconProps) {
   return (

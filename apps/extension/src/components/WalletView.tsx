@@ -105,14 +105,14 @@ export function WalletView({ wallet }: Props) {
         {has ? (
           <>
             <div
-              className="mt-[12px] flex h-[10px] gap-0.5 border-[1.5px] border-line"
+              className="mt-[12px] flex h-[10px] gap-0.5 overflow-hidden border-[1.5px] border-line"
               role="img"
               aria-label={`Stablecoins ${formatShare(wallet.stablecoinPct)}`}
             >
               {wallet.holdings.map((h, i) => (
                 <div
                   key={`${i}-${h.symbol}`}
-                  className={SEG[i % SEG.length]}
+                  className={`shrink-0 ${SEG[i % SEG.length]}`}
                   // Dynamic segment width — the one sanctioned inline-style case (CLAUDE.md).
                   style={{ width: `${h.pct}%` }}
                   title={`${h.symbol} ${formatShare(h.pct)}`}

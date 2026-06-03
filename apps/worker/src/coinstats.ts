@@ -237,7 +237,10 @@ export function normalizeWallet(addr: string, chain: Chain, payload: unknown): W
     const price = pickNumber(meta, 'price', 'priceUsd')
     const usd = pickNumber(meta, 'usd', 'balanceUSD', 'valueUsd') || amount * price
     if (usd <= 0) continue
+    const coinId = pickString(meta, 'coinId', 'id')
     holdings.push({
+      // Omit when absent so the client can branch on its presence (`coinId?`).
+      ...(coinId ? { coinId } : {}),
       symbol: pickString(meta, 'symbol').toUpperCase(),
       name: pickString(meta, 'name'),
       imgUrl: pickString(meta, 'imgUrl', 'icon', 'image'),

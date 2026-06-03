@@ -53,6 +53,12 @@ export type TokenSummary = {
 }
 
 export type Holding = {
+  /**
+   * CoinStats coin id / slug (e.g. "ethereum", "pepe"), used to deep-link the
+   * holding to `coinstats.app/coins/{coinId}`. Optional: absent for un-indexed
+   * tokens, in which case the row is rendered non-clickable.
+   */
+  coinId?: string
   symbol: string
   name: string
   imgUrl: string

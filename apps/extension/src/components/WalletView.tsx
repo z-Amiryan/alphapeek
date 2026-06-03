@@ -1,7 +1,7 @@
 // Wallet card (UX §3C) in the Terminal pattern. No PnL in v0.1 — extra credit
 // cost, deliberate v0.2 call. Footer links the block explorer (always correct)
 // rather than a guessed CoinStats per-address URL with no documented format.
-import type { WalletSummary } from '@alphapeek/shared'
+import type { Holding, WalletSummary } from '@alphapeek/shared'
 import { CHAIN_LABELS } from '@alphapeek/shared'
 import { useState } from 'react'
 import { explorerAddressUrl, explorerName } from '@/lib/chain'
@@ -16,6 +16,41 @@ type Props = {
 // Allocation-bar segment ramp (largest → smallest holding); the uncovered track
 // remainder reads as "other". Index-mapped so JIT sees the literal class names.
 const SEG = ['bg-seg-1', 'bg-seg-2', 'bg-seg-3', 'bg-seg-4', 'bg-seg-5'] as const
+
+const ROW =
+  'group flex items-center gap-[10px] px-[13px] py-[7px] transition-colors duration-tm [&+&]:border-t [&+&]:border-line hover:bg-bg'
+
+// A holding deep-links to its CoinStats coin page when we have its id; otherwise it
+// stays a plain row. The external-link affordance is hover-only so the card's resting
+// state (and the store screenshots) are unchanged.
+function HoldingRow({ holding }: { holding: Holding }) {
+  const inner = (
+    <>
+      <span className="w-14 text-[13px] font-bold">{holding.symbol}</span>
+      <span className="text-[12px] tabular-nums text-dim">{formatShare(holding.pct)}</span>
+      <span className="ml-auto text-[13px] font-bold tabular-nums">{formatUsd(holding.usd)}</span>
+      {holding.coinId ? (
+        <span className="shrink-0 text-dim opacity-0 transition-opacity duration-tm group-hover:opacity-100">
+          <ArrowOut />
+        </span>
+      ) : null}
+    </>
+  )
+
+  if (!holding.coinId) return <div className={ROW}>{inner}</div>
+
+  return (
+    <a
+      href={`https://coinstats.app/coins/${holding.coinId}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`View ${holding.symbol} on CoinStats`}
+      className={`${ROW} cursor-pointer text-fg no-underline`}
+    >
+      {inner}
+    </a>
+  )
+}
 
 export function WalletView({ wallet }: Props) {
   const [copied, setCopied] = useState(false)
@@ -98,16 +133,9 @@ export function WalletView({ wallet }: Props) {
       {has ? (
         <div className="pb-1">
           {wallet.holdings.map((h, i) => (
-            <div
-              // Holdings are a stable, pre-sorted snapshot; the index keeps keys
-              // unique when two holdings share a symbol.
-              key={`${i}-${h.symbol}`}
-              className="flex items-center gap-[10px] px-[13px] py-[7px] transition-colors duration-tm [&+&]:border-t [&+&]:border-line hover:bg-bg"
-            >
-              <span className="w-14 text-[13px] font-bold">{h.symbol}</span>
-              <span className="text-[12px] tabular-nums text-dim">{formatShare(h.pct)}</span>
-              <span className="ml-auto text-[13px] font-bold tabular-nums">{formatUsd(h.usd)}</span>
-            </div>
+            // Holdings are a stable, pre-sorted snapshot; the index keeps keys
+            // unique when two holdings share a symbol.
+            <HoldingRow key={`${i}-${h.symbol}`} holding={h} />
           ))}
         </div>
       ) : (

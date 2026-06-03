@@ -23,11 +23,7 @@ dist/
 
 # Local agent / tooling config (never commit)
 .claude/settings.local.json
-.claude/worktrees/
 *.local
-
-# Spurious npm lockfile — this repo uses pnpm
-package-lock.json
 
 # Logs
 *.log

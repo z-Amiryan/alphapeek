@@ -7,8 +7,8 @@ import { RecentLookups } from '@/components/RecentLookups'
 import { getDefaultChain, setDefaultChain } from '@/services/settings'
 
 // Public repo links (the live remote). Not secrets, safe to inline.
-const REPO_URL = 'https://github.com/ZhoraAmiryan/alphapeek'
-const ISSUES_URL = 'https://github.com/ZhoraAmiryan/alphapeek/issues'
+const REPO_URL = 'https://github.com/z-Amiryan/alphapeek'
+const ISSUES_URL = 'https://github.com/z-Amiryan/alphapeek/issues'
 
 const SECTION_DIVIDER = 'my-3 border-t border-neutral-100 dark:border-surface-dark-100'
 

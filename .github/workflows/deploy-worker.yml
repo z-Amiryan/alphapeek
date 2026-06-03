@@ -11,6 +11,14 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    # Routes the prod deploy through the `production` GitHub Environment so it
+    # pauses for required-reviewer approval — keeps "ask before deploying to
+    # Cloudflare production" (CLAUDE.md / DEPLOYMENT.md §2) true even on merge.
+    environment: production
+    # Never run two prod deploys at once; let an in-flight one finish.
+    concurrency:
+      group: deploy-worker
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
       # Version comes from the root package.json "packageManager" field; passing
@@ -25,3 +33,6 @@ jobs:
       - run: pnpm --filter @alphapeek/worker run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # Uncomment only if your API token spans multiple Cloudflare accounts
+          # (a single-account-scoped token lets wrangler infer the account):
+          # CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

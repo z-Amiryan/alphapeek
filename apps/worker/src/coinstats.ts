@@ -1,5 +1,44 @@
-import type { Chain, Holding, TokenSummary, WalletSummary } from '@alphapeek/shared'
+import type { Chain, Holding, TokenFlag, TokenSummary, WalletSummary } from '@alphapeek/shared'
 import type { Env } from './env'
+
+// USD stablecoins (uppercased symbols incl. common bridged variants, e.g. Binance-Peg
+// USDT shows as BSC-USD). Used to compute a wallet's risk-on-vs-parked ratio.
+const STABLECOINS: ReadonlySet<string> = new Set([
+  'USDT',
+  'USDC',
+  'DAI',
+  'BUSD',
+  'TUSD',
+  'USDD',
+  'FRAX',
+  'USDP',
+  'GUSD',
+  'FDUSD',
+  'USDE',
+  'PYUSD',
+  'LUSD',
+  'SUSD',
+  'USDC.E',
+  'BSC-USD',
+  'USDBC',
+  'USDB',
+  'CRVUSD',
+  'GHO',
+  'USDX',
+  'USR',
+])
+
+// Heuristic token-flag thresholds — soft hints, NOT a security verdict (token-risk is v0.2).
+const LOW_LIQUIDITY_VOLUME_USD = 50_000
+const HIGH_VOLATILITY_ABS_PCT = 25
+
+function deriveTokenFlags(volume: number, pCh24h: number): TokenFlag[] {
+  const flags: TokenFlag[] = []
+  // Thin 24h volume → hard to exit without slippage. volume === 0 means missing data, not zero.
+  if (volume > 0 && volume < LOW_LIQUIDITY_VOLUME_USD) flags.push('low_liquidity')
+  if (Math.abs(pCh24h) >= HIGH_VOLATILITY_ABS_PCT) flags.push('high_volatility')
+  return flags
+}
 
 // Mapped to a 503 by the router so the extension shows a graceful error card.
 export class UpstreamError extends Error {
@@ -9,16 +48,35 @@ export class UpstreamError extends Error {
   }
 }
 
-// Our chain ids -> CoinStats blockchain slugs. Validate against
-// `GET /wallet/blockchains` before production; the ones that differ (e.g. bsc) are risky.
-const CS_CHAIN: Record<Chain, string> = {
+// CoinStats uses DIFFERENT network identifiers per endpoint (verified live 2026-06-02):
+// `/coins?blockchains=` takes CoinStats' internal "chain" slugs (the `chain` field from
+// `GET /wallet/blockchains`), NOT the doc's examples (the doc's `binance-smart-chain` returns
+// 0 results). `/wallet/balance` keys off `connectionId` instead (see WALLET_CHAIN below) — it
+// is NOT a `blockchain=` param. bsc diverges most: `binance_smart` for coins vs
+// `binancesmartchain` for wallet — using the coins slug on the wallet call 503s every BSC
+// fallthrough. Verified live 2026-06-02: ethereum, base, bsc (`binance_smart`), polygon-pos,
+// arbitrum-one all resolve. optimism/avalanche follow the same convention but are UNVERIFIED.
+const COINS_CHAIN: Record<Chain, string> = {
   ethereum: 'ethereum',
-  bsc: 'binance-smart-chain',
-  polygon: 'polygon',
+  bsc: 'binance_smart',
+  polygon: 'polygon-pos',
   base: 'base',
-  arbitrum: 'arbitrum',
-  optimism: 'optimism',
+  arbitrum: 'arbitrum-one',
+  optimism: 'optimistic-ethereum',
   avalanche: 'avalanche',
+}
+
+// `/wallet/balance` keys off `connectionId` (from `GET /wallet/blockchains`), NOT a plain
+// `blockchain` name — and the connectionIds carry a `-wallet` suffix (except ethereum/bsc).
+// Passing the plain name 400s for every non-ethereum chain. Verified live 2026-06-02.
+const WALLET_CHAIN: Record<Chain, string> = {
+  ethereum: 'ethereum',
+  bsc: 'binancesmartchain',
+  polygon: 'polygon-wallet',
+  base: 'base-wallet',
+  arbitrum: 'arbitrum-wallet',
+  optimism: 'optimism-wallet',
+  avalanche: 'avalanche-wallet',
 }
 
 // The ONLY place X-API-KEY is attached. Never leak the key past this boundary.
@@ -93,7 +151,7 @@ export async function detectTokenCoinId(
   // Must be `contractAddresses` (plural): the singular form is ignored and the
   // API returns the chain's top-ranked coin, misdetecting every address as a token.
   const payload = await cs(env, '/coins', {
-    blockchains: CS_CHAIN[chain],
+    blockchains: COINS_CHAIN[chain],
     contractAddresses: addr,
     limit: '1',
   })
@@ -111,22 +169,30 @@ export function normalizeToken(
 ): TokenSummary {
   const rec = asRecord(details) ?? {}
   const coin = asRecord(rec.coin) ?? asRecord(rec.result) ?? rec
+  const pCh24h = pickNumber(coin, 'priceChange1d', 'pCh24h', 'priceChange24h')
+  const volume = pickNumber(coin, 'volume', 'volume24h', 'totalVolume')
   return {
     coinId,
     name: pickString(coin, 'name'),
     symbol: pickString(coin, 'symbol').toUpperCase(),
     imgUrl: pickString(coin, 'imgUrl', 'icon', 'image'),
     price: pickNumber(coin, 'price', 'priceUsd'),
-    pCh24h: pickNumber(coin, 'priceChange1d', 'pCh24h', 'priceChange24h'),
+    pCh24h,
     marketCap: pickNumber(coin, 'marketCap', 'marketCapUsd'),
-    volume: pickNumber(coin, 'volume', 'volume24h', 'totalVolume'),
+    volume,
     sparkline: chartPoints,
+    flags: deriveTokenFlags(volume, pCh24h),
   }
 }
 
-/** CoinStats charts come back as arrays of [timestamp, price, ...] tuples. */
+// `/coins/charts` returns `[{ coinId, chart: [[ts, usd, btc, eth], …] }]`; drill into the
+// first coin's `chart`. Also tolerates a bare tuple array in case the shape changes back.
 export function normalizeChart(payload: unknown): number[] {
-  const rows = pickArray(payload, 'chart', 'data')
+  let rows = pickArray(payload, 'chart', 'data')
+  const firstRec = asRecord(rows[0])
+  if (firstRec && Array.isArray(firstRec.chart)) {
+    rows = firstRec.chart as unknown[]
+  }
   const out: number[] = []
   for (const row of rows) {
     if (Array.isArray(row) && typeof row[1] === 'number' && Number.isFinite(row[1])) {
@@ -139,7 +205,9 @@ export function normalizeChart(payload: unknown): number[] {
 export async function fetchToken(env: Env, coinId: string): Promise<TokenSummary> {
   const [details, chart] = await Promise.all([
     cs(env, `/coins/${encodeURIComponent(coinId)}`, {}),
-    cs(env, `/coins/${encodeURIComponent(coinId)}/charts`, { period: '1w' }).catch(() => null),
+    // Correct endpoint is `/coins/charts?coinIds=…` (plural); the per-coin `/coins/{id}/charts`
+    // path 404s and was being swallowed by the catch, yielding an empty sparkline.
+    cs(env, '/coins/charts', { coinIds: coinId, period: '1w' }).catch(() => null),
   ])
   return normalizeToken(coinId, details, normalizeChart(chart))
 }
@@ -167,18 +235,27 @@ export function normalizeWallet(addr: string, chain: Chain, payload: unknown): W
   }
 
   const totalUsd = holdings.reduce((sum, h) => sum + h.usd, 0)
+  // Sum stables over the FULL list, before the top-5 slice, so the ratio stays accurate
+  // even when stablecoins fall outside the displayed holdings.
+  const stableUsd = holdings.reduce((sum, h) => (STABLECOINS.has(h.symbol) ? sum + h.usd : sum), 0)
   for (const h of holdings) {
     h.pct = totalUsd > 0 ? (h.usd / totalUsd) * 100 : 0
   }
   holdings.sort((a, b) => b.usd - a.usd)
 
-  return { address: addr, chain, totalUsd, holdings: holdings.slice(0, 5) }
+  return {
+    address: addr,
+    chain,
+    totalUsd,
+    holdings: holdings.slice(0, 5),
+    stablecoinPct: totalUsd > 0 ? (stableUsd / totalUsd) * 100 : 0,
+  }
 }
 
 export async function fetchWallet(env: Env, addr: string, chain: Chain): Promise<WalletSummary> {
   const payload = await cs(env, '/wallet/balance', {
     address: addr,
-    blockchain: CS_CHAIN[chain],
+    connectionId: WALLET_CHAIN[chain],
   })
   return normalizeWallet(addr, chain, payload)
 }

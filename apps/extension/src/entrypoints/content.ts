@@ -39,6 +39,9 @@ export default defineContentScript({
     let card: CardHandle | null = null
     let cardAddr: string | null = null
     let pointerOnCard = false
+    // Live cursor position, used to sanity-check dismissals against real geometry.
+    let lastX = 0
+    let lastY = 0
 
     ensureUnderlineStyle()
 
@@ -61,10 +64,25 @@ export default defineContentScript({
       pendingAddr = null
     }
 
+    // A fixed, top-layer card overlapping the anchor (plus the shadow-root boundary) makes the
+    // browser fire a spurious `mouseleave` on the anchor the moment the card mounts — while the
+    // cursor is geometrically still on the address. That was the show/hide flicker. So before
+    // tearing down, re-check real cursor geometry: keep the card if the cursor is still inside
+    // the anchor's box or over the card host.
+    function cursorOverAnchorOrCard(): boolean {
+      if (activeAnchor) {
+        const r = activeAnchor.getBoundingClientRect()
+        if (lastX >= r.left && lastX <= r.right && lastY >= r.top && lastY <= r.bottom) return true
+      }
+      if (card && document.elementFromPoint(lastX, lastY)?.closest('alphapeek-card')) return true
+      return false
+    }
+
     function scheduleDismiss(): void {
       clearTimeout(dismissTimer)
       dismissTimer = setTimeout(() => {
-        if (!pointerOnCard) reset()
+        if (pointerOnCard || cursorOverAnchorOrCard()) return
+        reset()
       }, DISMISS_GRACE)
     }
 
@@ -135,7 +153,14 @@ export default defineContentScript({
       }, HOVER_DELAY)
     }
 
+    function onMouseMove(e: MouseEvent): void {
+      lastX = e.clientX
+      lastY = e.clientY
+    }
+
     function onMouseOver(e: MouseEvent): void {
+      lastX = e.clientX
+      lastY = e.clientY
       if (pointerOnCard) return
       const node = textNodeAt(e.clientX, e.clientY)
       const text = node?.textContent
@@ -151,6 +176,9 @@ export default defineContentScript({
     }
 
     document.body.addEventListener('mouseover', onMouseOver)
+    // Passive cursor tracking so the dismiss-time geometry check uses the live position
+    // (mouseover only fires on enter, not while the cursor sits on the address).
+    document.addEventListener('mousemove', onMouseMove, { passive: true })
 
     // X virtualizes its feed: if the anchored node is detached (tweet recycled),
     // tear the card down so it can't dangle (UX edge #5). This is the only job of
@@ -164,6 +192,7 @@ export default defineContentScript({
       reset()
       observer.disconnect()
       document.body.removeEventListener('mouseover', onMouseOver)
+      document.removeEventListener('mousemove', onMouseMove)
     })
   },
 })

@@ -159,6 +159,7 @@ type TokenSummary = {
   marketCap: number
   volume: number
   sparkline: number[]  // 7d, ~168 points
+  flags: TokenFlag[]   // 'low_liquidity' | 'high_volatility' — market-data hints, not a safety verdict
 }
 
 type WalletSummary = {
@@ -172,6 +173,7 @@ type WalletSummary = {
     usd: number
     pct: number  // 0-100
   }>
+  stablecoinPct: number  // 0-100, computed over the FULL holdings before the top-N slice
 }
 ```
 
@@ -205,14 +207,31 @@ Rate limit state lives in `RATELIMIT` KV namespace with auto-expiry.
 
 | Internal use | CoinStats path | Cost |
 |---|---|---|
-| Detect if address is a token | `GET /coins?blockchains={chain}&contractAddresses={addr}&limit=1` | ~5 credits |
+| Detect if address is a token | `GET /coins?blockchains={coinsSlug}&contractAddresses={addr}&limit=1` | ~5 credits |
 | Token details | `GET /coins/{coinId}` | ~1 credit |
-| Token 7d chart | `GET /coins/{coinId}/charts?period=1w` | ~2 credits |
-| Wallet balance | `GET /wallet/balance?address={addr}&blockchain={chain}` | **40 credits** |
+| Token 7d chart | `GET /coins/charts?coinIds={coinId}&period=1w` | ~3 credits |
+| Wallet balance | `GET /wallet/balance?address={addr}&connectionId={connSlug}` | **40 credits** |
 
 (Costs are estimates — verify against `https://coinstats.app/docs/multipliers.md` and the per-endpoint docs.)
 
-**Verified against the live API (2026-06-01):**
+**Chain slugs differ PER ENDPOINT — three namespaces (verified live 2026-06-02).** Do not share
+one map. `/coins?blockchains=` uses CoinStats' internal "chain" slugs; `/wallet/balance` uses the
+`connectionId` from `GET /wallet/blockchains` (NOT a `blockchain` param). The worker keeps two
+maps (`COINS_CHAIN`, `WALLET_CHAIN`) in `apps/worker/src/coinstats.ts`.
+
+| our `chain` | `/coins` blockchains | `/wallet/balance` connectionId | status |
+|---|---|---|---|
+| ethereum | `ethereum` | `ethereum` | verified |
+| bsc | `binance_smart` ⚠️ (NOT `binance-smart-chain`) | `binancesmartchain` | verified |
+| base | `base` | `base-wallet` | verified |
+| polygon | `polygon-pos` | `polygon-wallet` | verified (coins) |
+| arbitrum | `arbitrum-one` | `arbitrum-wallet` | verified (coins) |
+| optimism | `optimistic-ethereum` | `optimism-wallet` | **unverified** |
+| avalanche | `avalanche` | `avalanche-wallet` | **unverified** |
+
+**Verified against the live API (2026-06-01)** — note: the chart-shape and endpoint notes in
+this section were corrected the next day; see the **2026-06-02** section below, which supersedes
+any conflicting statement here.
 
 - The detection filter param is **`contractAddresses` (plural)**, not `contractAddress`.
   The singular form is silently ignored by CoinStats: it returns the top-ranked
@@ -225,8 +244,9 @@ Rate limit state lives in `RATELIMIT` KV namespace with auto-expiry.
   `unknown` / fall through to the wallet path. Normal ERC-20s are unaffected. Use
   SHIB/PEPE, not USDT, as the token smoke-test address.
 - Response field names confirmed: coins use `id`, `icon`, `priceChange1d`,
-  `marketCap`, `volume`; charts are bare `[ts, price, …]` tuple arrays;
-  `/wallet/balance` returns a flat array of `{ amount, price, symbol, name, imgUrl,
+  `marketCap`, `volume`; charts were assumed to be bare `[ts, price, …]` tuple arrays
+  (**superseded** — the correct `/coins/charts` endpoint returns a wrapped array; see the
+  2026-06-02 section below); `/wallet/balance` returns a flat array of `{ amount, price, symbol, name, imgUrl,
   coinId }` (no `usd` field — value is `amount * price`); fear & greed nests under
   `now: { value, value_classification }`.
 - **Rate limit:** this API key's plan throttles aggressively. A token lookup fires
@@ -234,6 +254,26 @@ Rate limit state lives in `RATELIMIT` KV namespace with auto-expiry.
   `cs()` maps to a `503 upstream_error` per spec. Single-call lookups (wallet,
   fear-greed) are fine. The mandatory KV cache (§ above) is what keeps this within
   budget in practice; space out manual test calls.
+
+**Verified live 2026-06-02 (fixed bugs — see the slug table above):**
+
+- **BSC detection was broken by the wrong `/coins` slug.** The docs say `binance-smart-chain`,
+  but that returns 0 results; the working value is **`binance_smart`**. Fixed → all trending BSC
+  tokens (CAKE, XVS, FLOKI, CHEEMS, BROCCOLI, BOB, Siren) resolve.
+- **Wallet lookups were broken on every non-ETH chain.** `/wallet/balance` keys off
+  **`connectionId`** (e.g. `base-wallet`, `binancesmartchain`), not a plain `blockchain=` name —
+  the latter 400s. Fixed → BSC/Base wallets return holdings.
+- **7d chart endpoint was wrong.** Correct path is **`GET /coins/charts?coinIds={id}&period=1w`**
+  (plural `coinIds`); response is `[{ coinId, chart: [[ts, usd, btc, eth], …] }]` (a wrapped
+  array, NOT the bare tuple array noted above for the old path). The old `/coins/{id}/charts`
+  404'd and was swallowed by `.catch(()=>null)` → empty sparkline. `normalizeChart` now drills
+  into `[0].chart`. Note: the chart call still silently empties under rate-limit (best-effort).
+- **`?contractAddresses=` works as a filter empirically, though the 2025-06-11 changelog documents
+  it as a *response field only*** — undocumented/fragile. Each CA resolves to its own coin.
+  Long-term-safe alternative: a preloaded `{chain:addr→coinId}` index from the response field.
+- **Indexing latency ≈ hours.** A ~1h-old Base token ($138k liq) returned `unknown`; a ~9h-old
+  one resolved. CoinStats indexes new tokens within hours regardless of liquidity → not a
+  minute-zero tool. See § 9.
 
 ### Worker reference implementation
 
@@ -364,6 +404,8 @@ export type Chain =
   | 'ethereum' | 'bsc' | 'polygon' | 'base'
   | 'arbitrum' | 'optimism' | 'avalanche'
 
+export type TokenFlag = 'low_liquidity' | 'high_volatility'
+
 export type TokenSummary = {
   coinId: string
   name: string
@@ -374,6 +416,7 @@ export type TokenSummary = {
   marketCap: number
   volume: number
   sparkline: number[]
+  flags: TokenFlag[]  // market-data hints only — NOT a safety verdict
 }
 
 export type WalletSummary = {
@@ -387,6 +430,7 @@ export type WalletSummary = {
     usd: number
     pct: number
   }>
+  stablecoinPct: number  // 0-100, over the FULL holdings before the slice
 }
 
 export type LookupResult =
@@ -440,3 +484,8 @@ If a budget is exceeded after honest effort, document the gap in the PR and deci
 - **No persistent watchlist** — in v0.3 with optional account
 - **No alerts/notifications** — in v0.3
 - **Chain inference is best-effort** — Twitter has no URL context, may guess wrong chain
+- **Not a launch-sniping tool — ~hours of indexing latency.** CoinStats indexes new tokens within
+  a few hours of launch (a ~1h-old token returns `unknown`; ~9h-old resolves), regardless of
+  liquidity. AlphaPeek is a **trending/established-token inspector**, not a minute-zero ape tool.
+  Tokens too new to be indexed should render a dedicated **"Too new — not indexed yet"** card
+  (with a DexScreener link), never a generic error. Market the product accordingly.

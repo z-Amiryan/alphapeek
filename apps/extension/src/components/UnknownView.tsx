@@ -1,7 +1,9 @@
-// Unknown-address state (UX §3D): say what we know, offer a block-explorer link.
+// Unknown-address state (UX §3D): say what we honestly know, offer outbound links.
+// CoinStats has a ~few-hour indexing lag (SPEC §9), so a brand-new token contract that
+// isn't listed yet lands here — DexScreener usually has it before CoinStats does.
 import type { Chain } from '@alphapeek/shared'
 import { ExternalLink } from 'lucide-react'
-import { explorerAddressUrl, explorerName } from '@/lib/chain'
+import { dexScreenerUrl, explorerAddressUrl, explorerName } from '@/lib/chain'
 import { truncateAddress } from '@/lib/format'
 
 type Props = {
@@ -16,17 +18,29 @@ export function UnknownView({ addr, chain }: Props) {
         {truncateAddress(addr)}
       </div>
       <p className="mt-2 text-sm text-neutral-500">
-        No data found for this address. It might be a fresh wallet or an unsupported chain.
+        No data yet. This could be a brand-new token that isn&apos;t indexed yet, a fresh or empty
+        wallet, or an unsupported chain.
       </p>
-      <a
-        href={explorerAddressUrl(chain, addr)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline"
-      >
-        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-        Check on {explorerName(chain)}
-      </a>
+      <div className="mt-3 flex items-center gap-4">
+        <a
+          href={dexScreenerUrl(chain, addr)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline"
+        >
+          <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+          DEXScreener
+        </a>
+        <a
+          href={explorerAddressUrl(chain, addr)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline"
+        >
+          <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+          {explorerName(chain)}
+        </a>
+      </div>
     </div>
   )
 }

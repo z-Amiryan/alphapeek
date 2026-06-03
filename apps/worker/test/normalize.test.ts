@@ -40,6 +40,22 @@ describe('normalizeWallet', () => {
     expect(w.totalUsd).toBe(35500)
     // ETH share = 20000 / 35500
     expect(Math.round(w.holdings[0]?.pct ?? 0)).toBe(56)
+    // Stables (usdc 8000 + dai 2000) over the FULL list / total — incl. the sliced-off dust.
+    expect(Math.round(w.stablecoinPct)).toBe(28)
+  })
+
+  it('reports 0 stablecoinPct for an all-volatile wallet, incl. bridged BSC-USD as stable', () => {
+    const noStables = normalizeWallet('0xabc', 'ethereum', {
+      balances: [{ symbol: 'pepe', usd: 1000 }],
+    })
+    expect(noStables.stablecoinPct).toBe(0)
+    const bridged = normalizeWallet('0xabc', 'bsc', {
+      balances: [
+        { symbol: 'bnb', usd: 600 },
+        { symbol: 'BSC-USD', usd: 400 },
+      ],
+    })
+    expect(Math.round(bridged.stablecoinPct)).toBe(40)
   })
 
   it('returns empty holdings for an empty payload', () => {
@@ -60,6 +76,18 @@ describe('normalizeToken', () => {
     expect(t.pCh24h).toBe(-0.2)
     expect(t.sparkline).toEqual([1, 1.01, 0.99])
   })
+
+  it('derives low_liquidity + high_volatility flags from market data', () => {
+    const thin = normalizeToken('x', { symbol: 'x', volume: 10_000, priceChange1d: 30 }, [])
+    expect(thin.flags).toEqual(['low_liquidity', 'high_volatility'])
+
+    const healthy = normalizeToken('x', { symbol: 'x', volume: 5_000_000, priceChange1d: 4 }, [])
+    expect(healthy.flags).toEqual([])
+
+    // volume 0 means MISSING data, not a thin market — must not flag low_liquidity.
+    const noVol = normalizeToken('x', { symbol: 'x', priceChange1d: -40 }, [])
+    expect(noVol.flags).toEqual(['high_volatility'])
+  })
 })
 
 describe('normalizeChart', () => {
@@ -74,6 +102,20 @@ describe('normalizeChart', () => {
   })
   it('tolerates wrapper objects and bad rows', () => {
     expect(normalizeChart({ chart: [[1, 5], ['bad'], [2, 6]] })).toEqual([5, 6])
+  })
+  it('drills into the wrapped /coins/charts shape [{ coinId, chart: [...] }]', () => {
+    expect(
+      normalizeChart([
+        {
+          coinId: 'bitcoin',
+          chart: [
+            [1, 100, 0, 0],
+            [2, 110, 0, 0],
+            [3, 105, 0, 0],
+          ],
+        },
+      ]),
+    ).toEqual([100, 110, 105])
   })
 })
 

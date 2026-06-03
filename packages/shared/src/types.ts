@@ -31,6 +31,12 @@ export function isChain(value: string): value is Chain {
   return (SUPPORTED_CHAINS as readonly string[]).includes(value)
 }
 
+/**
+ * Heuristic, market-data-derived hints — NOT a security verdict. Surfaced as soft
+ * badges on the token card. Token-risk scoring (honeypot/ownership) is deferred (ROADMAP).
+ */
+export type TokenFlag = 'low_liquidity' | 'high_volatility'
+
 export type TokenSummary = {
   coinId: string
   name: string
@@ -42,6 +48,8 @@ export type TokenSummary = {
   volume: number
   /** 7d price series, ~168 hourly points. May be empty if charts are unavailable. */
   sparkline: number[]
+  /** Derived market-data hints (low_liquidity, high_volatility). Never a safety guarantee. */
+  flags: TokenFlag[]
 }
 
 export type Holding = {
@@ -59,6 +67,12 @@ export type WalletSummary = {
   totalUsd: number
   /** Sorted by USD value descending, top holdings only. */
   holdings: Holding[]
+  /**
+   * Share of total wallet value held in USD stablecoins, 0-100. Computed over the
+   * FULL holdings list before the top-N slice, so it's accurate even when stables
+   * fall outside the displayed holdings. "Risk-on vs parked in stables" signal.
+   */
+  stablecoinPct: number
 }
 
 export type LookupResult =

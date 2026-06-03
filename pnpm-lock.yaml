@@ -64,6 +64,40 @@ importers:
         specifier: ^0.19.13
         version: 0.19.29(@types/node@25.9.1)(rollup@4.60.4)
 
+  apps/store-visuals:
+    dependencies:
+      '@alphapeek/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+    devDependencies:
+      '@types/react':
+        specifier: ^18.3.12
+        version: 18.3.29
+      '@types/react-dom':
+        specifier: ^18.3.1
+        version: 18.3.7(@types/react@18.3.29)
+      autoprefixer:
+        specifier: ^10.4.20
+        version: 10.5.0(postcss@8.5.15)
+      postcss:
+        specifier: ^8.4.49
+        version: 8.5.15
+      tailwindcss:
+        specifier: ^3.4.15
+        version: 3.4.19
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      vite:
+        specifier: ^6.0.0
+        version: 6.4.2(@types/node@25.9.1)(jiti@2.7.0)
+
   apps/worker:
     dependencies:
       '@alphapeek/shared':

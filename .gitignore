@@ -32,3 +32,7 @@ pnpm-debug.log*
 
 # Test / coverage
 coverage/
+
+# Generated store-visuals capture output (regenerate via the store-visuals app)
+apps/store-visuals/export/
+.tmp-shots/

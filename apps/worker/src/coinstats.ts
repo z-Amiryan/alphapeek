@@ -216,8 +216,14 @@ export async function fetchTokenDetail(env: Env, coinId: string): Promise<TokenS
 // Correct endpoint is `/coins/charts?coinIds=…` (plural); the per-coin
 // `/coins/{id}/charts` path 404s.
 export async function fetchChart(env: Env, coinId: string): Promise<number[] | null> {
+  // Log before swallowing so a credit storm / expired key (401) / 429 is visible in
+  // Workers observability — degradation is intentional, silence is not. console.warn
+  // (not .log) is allowed by Biome and is the Workers-runtime way to reach logs.
   const payload = await cs(env, '/coins/charts', { coinIds: coinId, period: '1w' }).catch(
-    () => null,
+    (err: unknown) => {
+      console.warn(`chart fetch failed for ${coinId}: ${String(err)}`)
+      return null
+    },
   )
   if (payload === null) return null
   const points = normalizeChart(payload)

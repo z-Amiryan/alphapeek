@@ -21,7 +21,7 @@ export const TOKEN: TokenSummary = {
 }
 
 export const WALLET: WalletSummary = {
-  address: '0xce370d3e1b7e7f7d2f1d6e8b9a4c2f0e8d7c6b3a7d93',
+  address: '0xce370d3e1b7e7f7d2f1d6e8b9a4c2f0e8d7c7d93',
   chain: 'base',
   totalUsd: 48_237_512,
   stablecoinPct: 18,

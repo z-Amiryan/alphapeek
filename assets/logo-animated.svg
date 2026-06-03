@@ -1,31 +1,60 @@
 <svg width="120" height="120" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="AlphaPeek">
-  <!-- AlphaPeek brand mark, animated: the inner stepped-sparkline draws itself in,
-       holds, then retracts, on a gentle 4s loop. SMIL is used (not CSS/JS) so the
-       motion survives GitHub's README sanitizer. The path declares
-       pathLength="100" so the dash math is unit-agnostic. Keep the glyph in sync
-       with apps/extension/public/icon.svg. -->
+  <!-- AlphaPeek brand mark, animated: a "peek" loop. The front lime card lifts up
+       off its ink shadow card (revealing depth) while the stepped sparkline draws
+       itself in, holds, then everything settles back — a gentle 4s loop. SMIL is
+       used (not CSS/JS) so the motion survives GitHub's README sanitizer. The
+       lift/settle of the front card and its shadow are mirrored animateTransforms;
+       the path declares pathLength="100" so the dash math is unit-agnostic. Keep
+       the glyph in sync with apps/extension/public/icon.svg. -->
   <rect width="40" height="40" fill="#c6f432" />
-  <rect x="13" y="13" width="20" height="20" fill="#0d0d0d" />
-  <rect x="7" y="7" width="20" height="20" fill="#c6f432" stroke="#0d0d0d" stroke-width="2.2" />
-  <path
-    d="M10.5 21 H14 V16.5 H17.5 V18.5 H21 V12.5"
-    fill="none"
-    stroke="#0d0d0d"
-    stroke-width="2"
-    stroke-linecap="square"
-    stroke-linejoin="miter"
-    pathLength="100"
-    stroke-dasharray="100"
-    stroke-dashoffset="100"
-  >
-    <animate
-      attributeName="stroke-dashoffset"
-      values="100;0;0;100;100"
-      keyTimes="0;0.3;0.65;0.85;1"
+
+  <!-- shadow card: eases down/right as the front card lifts, deepening the gap -->
+  <rect x="13" y="13" width="20" height="20" fill="#0d0d0d">
+    <animateTransform
+      attributeName="transform"
+      type="translate"
+      values="0 0; 1.5 1.5; 1.5 1.5; 0 0"
+      keyTimes="0;0.35;0.75;1"
       calcMode="spline"
-      keySplines="0.4 0 0.2 1; 0 0 1 1; 0.4 0 0.6 1; 0 0 1 1"
+      keySplines="0.4 0 0.2 1; 0 0 1 1; 0.4 0 0.2 1"
       dur="4s"
       repeatCount="indefinite"
     />
-  </path>
+  </rect>
+
+  <!-- front card + sparkline: lift up/left, hold, settle — sparkline draws with it -->
+  <g>
+    <animateTransform
+      attributeName="transform"
+      type="translate"
+      values="0 0; -1.5 -1.5; -1.5 -1.5; 0 0"
+      keyTimes="0;0.35;0.75;1"
+      calcMode="spline"
+      keySplines="0.4 0 0.2 1; 0 0 1 1; 0.4 0 0.2 1"
+      dur="4s"
+      repeatCount="indefinite"
+    />
+    <rect x="7" y="7" width="20" height="20" fill="#c6f432" stroke="#0d0d0d" stroke-width="2.2" />
+    <path
+      d="M10.5 21 H14 V16.5 H17.5 V18.5 H21 V12.5"
+      fill="none"
+      stroke="#0d0d0d"
+      stroke-width="2"
+      stroke-linecap="square"
+      stroke-linejoin="miter"
+      pathLength="100"
+      stroke-dasharray="100"
+      stroke-dashoffset="100"
+    >
+      <animate
+        attributeName="stroke-dashoffset"
+        values="100;100;0;0;100;100"
+        keyTimes="0;0.05;0.35;0.75;0.95;1"
+        calcMode="spline"
+        keySplines="0 0 1 1; 0.4 0 0.2 1; 0 0 1 1; 0.4 0 0.2 1; 0 0 1 1"
+        dur="4s"
+        repeatCount="indefinite"
+      />
+    </path>
+  </g>
 </svg>

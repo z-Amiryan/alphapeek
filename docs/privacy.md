@@ -1,6 +1,6 @@
 # Privacy Policy — AlphaPeek
 
-_Last updated: TBD on first release._
+_Last updated: June 3, 2026._
 
 AlphaPeek is an open-source Chrome extension that shows information about EVM wallet addresses and token contracts when you hover them on supported websites. This document explains what data the extension touches and what it doesn't.
 

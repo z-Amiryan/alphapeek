@@ -19,19 +19,22 @@ const LIME = [0xc6, 0xf4, 0x32] // #c6f432
 const INK = [0x0d, 0x0d, 0x0d] // #0d0d0d
 const SIZES = [16, 48, 128]
 
-// Stepped-sparkline polyline + trailing pixel, in the icon.svg 40-unit space.
+// Offset "data card" motif + inner stepped sparkline, in the icon.svg 40-unit
+// space. The ink shadow-card sits behind a lime front-card (ink border); the
+// sparkline lives inside the front-card. Keep these in sync with icon.svg.
+const SHADOW_CARD = { x: 13, y: 13, w: 20, h: 20 }
+const FRONT_CARD = { x: 7, y: 7, w: 20, h: 20 }
+const CARD_STROKE = 2.2
 const GLYPH_PTS = [
-  [7, 25],
-  [13, 25],
-  [13, 19],
-  [19, 19],
-  [19, 22],
-  [25, 22],
-  [25, 13],
-  [33, 13],
+  [10.5, 21],
+  [14, 21],
+  [14, 16.5],
+  [17.5, 16.5],
+  [17.5, 18.5],
+  [21, 18.5],
+  [21, 12.5],
 ]
-const GLYPH_STROKE = 2.6
-const GLYPH_PIXEL = { x: 31.5, y: 11.5, size: 3.4 }
+const GLYPH_STROKE = 2
 
 /** CRC32 (PNG chunk checksum). */
 const CRC_TABLE = (() => {
@@ -63,38 +66,57 @@ function chunk(type, data) {
   return Buffer.concat([lenBuf, typeBuf, data, crcBuf])
 }
 
+function inRect(cx, cy, r, k) {
+  return cx >= r.x * k && cx <= (r.x + r.w) * k && cy >= r.y * k && cy <= (r.y + r.h) * k
+}
+
+/** Distance from a point to a rectangle's outline (its 4 edge segments). */
+function distToRectOutline(cx, cy, r, k) {
+  const x1 = r.x * k
+  const y1 = r.y * k
+  const x2 = (r.x + r.w) * k
+  const y2 = (r.y + r.h) * k
+  return Math.min(
+    distToSegment(cx, cy, x1, y1, x2, y1),
+    distToSegment(cx, cy, x2, y1, x2, y2),
+    distToSegment(cx, cy, x2, y2, x1, y2),
+    distToSegment(cx, cy, x1, y2, x1, y1),
+  )
+}
+
 function renderPixels(size) {
   const s = size
   const px = new Uint8Array(s * s * 4) // RGBA
   const k = s / 40 // design units → pixels
-  const halfW = (GLYPH_STROKE * k) / 2
+  const glyphHalf = (GLYPH_STROKE * k) / 2
+  const cardHalf = (CARD_STROKE * k) / 2
   const pts = GLYPH_PTS.map(([x, y]) => [x * k, y * k])
-  const sqX1 = GLYPH_PIXEL.x * k
-  const sqY1 = GLYPH_PIXEL.y * k
-  const sqX2 = (GLYPH_PIXEL.x + GLYPH_PIXEL.size) * k
-  const sqY2 = (GLYPH_PIXEL.y + GLYPH_PIXEL.size) * k
 
   for (let y = 0; y < s; y++) {
     for (let x = 0; x < s; x++) {
       const i = (y * s + x) * 4
-      // Lime tile fills the whole canvas (hard square — no radius).
-      px[i] = LIME[0]
-      px[i + 1] = LIME[1]
-      px[i + 2] = LIME[2]
-      px[i + 3] = 255
-
       const cx = x + 0.5
       const cy = y + 0.5
-      let ink = cx >= sqX1 && cx <= sqX2 && cy >= sqY1 && cy <= sqY2
-      for (let seg = 0; seg < pts.length - 1 && !ink; seg++) {
+
+      // Paint order mirrors the SVG: lime tile → ink shadow-card → lime
+      // front-card face (covers the shadow) → ink front-card border → ink
+      // sparkline.
+      let rgb = LIME
+      if (inRect(cx, cy, SHADOW_CARD, k)) rgb = INK
+      if (inRect(cx, cy, FRONT_CARD, k)) rgb = LIME
+      if (distToRectOutline(cx, cy, FRONT_CARD, k) <= cardHalf) rgb = INK
+      for (let seg = 0; seg < pts.length - 1; seg++) {
         const d = distToSegment(cx, cy, pts[seg][0], pts[seg][1], pts[seg + 1][0], pts[seg + 1][1])
-        if (d <= halfW) ink = true
+        if (d <= glyphHalf) {
+          rgb = INK
+          break
+        }
       }
-      if (ink) {
-        px[i] = INK[0]
-        px[i + 1] = INK[1]
-        px[i + 2] = INK[2]
-      }
+
+      px[i] = rgb[0]
+      px[i + 1] = rgb[1]
+      px[i + 2] = rgb[2]
+      px[i + 3] = 255
     }
   }
   return px

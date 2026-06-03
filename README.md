@@ -1,4 +1,8 @@
-# AlphaPeek
+<p align="center">
+  <img src="assets/logo-animated.svg" alt="AlphaPeek" width="96" height="96" />
+</p>
+
+<h1 align="center">AlphaPeek</h1>
 
 > Peek any wallet or token address on X — instant balances, holdings, and prices.
 

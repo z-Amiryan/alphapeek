@@ -3,3 +3,26 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Animated brand mark (LogoMark `animated`): draw the inner sparkline in on
+   mount. The path declares pathLength="100", so the dash math is unit-agnostic.
+   Honors reduced-motion by showing the finished line with no animation. */
+@keyframes ap-logo-draw {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.ap-logo-line {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: ap-logo-draw 0.9s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ap-logo-line {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}

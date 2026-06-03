@@ -21,15 +21,25 @@ function LogoMark({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
   return (
     <span className={`logo-mark ${size === 'lg' ? 'lm-lg' : 'lm-sm'}`}>
       <svg viewBox="0 0 40 40" width={px} height={px} aria-hidden="true">
+        <rect width="40" height="40" fill="#c6f432" />
+        <rect x="13" y="13" width="20" height="20" fill="#0d0d0d" />
+        <rect
+          x="7"
+          y="7"
+          width="20"
+          height="20"
+          fill="#c6f432"
+          stroke="#0d0d0d"
+          strokeWidth="2.2"
+        />
         <path
-          d="M7 25 H13 V19 H19 V22 H25 V13 H33"
+          d="M10.5 21 H14 V16.5 H17.5 V18.5 H21 V12.5"
           fill="none"
           stroke="#0d0d0d"
-          strokeWidth="2.6"
+          strokeWidth="2"
           strokeLinecap="square"
           strokeLinejoin="miter"
         />
-        <rect x="31.5" y="11.5" width="3.4" height="3.4" fill="#0d0d0d" />
       </svg>
     </span>
   )

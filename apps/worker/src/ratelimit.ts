@@ -37,7 +37,7 @@ export async function withinIpLimit(
 
 // Returns true and records the hit if the global daily cap is not yet reached.
 export async function withinDailyCap(env: Env, now: Date = new Date()): Promise<boolean> {
-  const cap = Number(env.DAILY_CAP) || 50_000
+  const cap = Number(env.DAILY_CAP) || 5_000
   const key = `cap:${dayKey(now)}`
   const current = Number((await env.RATELIMIT.get(key)) ?? '0')
 

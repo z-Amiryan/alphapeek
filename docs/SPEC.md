@@ -199,7 +199,7 @@ Returns `{ ok: true, version: string }`. No auth, no rate limit.
 | Limit | Window | Scope | Action |
 |---|---|---|---|
 | 60 requests | 1 minute | per IP | 429 |
-| `DAILY_CAP` (default 50,000) | 1 day | global | 503 + alert |
+| `DAILY_CAP` (default 5,000) | 1 day | global | 503 + alert |
 
 Rate limit state lives in `RATELIMIT` KV namespace with auto-expiry.
 
@@ -300,7 +300,7 @@ binding = "RATELIMIT"
 id = "REPLACE_ME"
 
 [vars]
-DAILY_CAP = "50000"
+DAILY_CAP = "5000"
 
 # Secret (never commit):
 #   wrangler secret put COINSTATS_API_KEY

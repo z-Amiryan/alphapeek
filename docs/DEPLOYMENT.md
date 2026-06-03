@@ -285,11 +285,31 @@ security). Defense is layered instead:
 - The mandatory KV cache (SPEC §4) collapses repeat lookups so normal traffic
   costs far fewer credits than requests.
 
-**At the Cloudflare edge (configure in the dashboard — cannot be scripted here):**
-- **Rate Limiting rule** on the Worker route, e.g. ~30 requests/min per IP, action
-  *Block*. This runs before the Worker, so it also blocks IP-rotating bursts cheaply.
-- **Bot Fight Mode** (Security → Bots) to filter automated traffic.
-- Optionally **Turnstile** if abuse persists.
+**At the Cloudflare edge — only on a custom domain, NOT on `*.workers.dev`:**
+WAF Rate Limiting rules, Bot Fight Mode, and Turnstile are **zone-level** features.
+They apply to domains you've added to Cloudflare, **not** to the shared `workers.dev`
+domain. While the Worker is served from `alphapeek-proxy.<sub>.workers.dev`, the
+in-code limits above are the defense; these dashboard controls are unavailable.
+
+To unlock them (recommended before flipping the listing **Public**, optional for an
+unlisted beta):
+1. Add a domain you own to Cloudflare (free plan) and update its nameservers.
+2. **Workers & Pages → alphapeek-proxy → Settings → Domains & Routes → Add Custom
+   Domain** (e.g. `api.alphapeek.app`). This binds the Worker to that zone.
+3. Update `VITE_WORKER_URL` + the `wxt.config.ts` CSP `connect-src` to the custom
+   domain, rebuild, and re-submit the extension.
+4. Now on that zone: **Security → Bots → Bot Fight Mode** (on), **Security → WAF →
+   Rate limiting rules** (~30 req/min per IP, action *Block*), and optionally
+   **Turnstile** if abuse persists. These run before the Worker, so they also blunt
+   IP-rotating bursts cheaply.
+
+A custom domain also removes the single-point-of-failure of the shared `workers.dev`
+host and reads as more trustworthy in the privacy policy.
+
+**On `workers.dev` today:** enable Worker observability (`[observability] enabled =
+true` in `wrangler.toml`) and watch **Workers → Metrics** + CoinStats credit usage
+(§10) — that plus the in-code per-IP and `DAILY_CAP` limits is sufficient for a
+small unlisted beta.
 
 **Operational:**
 - Watch CoinStats credit usage daily (§10). Pick a `DAILY_CAP` whose worst-case

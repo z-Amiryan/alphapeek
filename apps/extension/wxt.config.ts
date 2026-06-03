@@ -17,7 +17,7 @@ export default defineConfig({
     // deployed host after release (DEPLOYMENT.md §2).
     content_security_policy: {
       extension_pages:
-        "script-src 'self'; object-src 'self'; connect-src 'self' https://*.workers.dev http://localhost:8787",
+        "script-src 'self'; object-src 'self'; connect-src 'self' https://alphapeek-proxy.z-amiryan.workers.dev http://localhost:8787",
     },
   },
 })

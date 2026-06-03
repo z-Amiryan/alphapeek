@@ -1,4 +1,7 @@
-@import url("https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap");
+/* Popup uses the Tailwind `font-mono` stack (Space Mono if locally installed,
+   else the system monospace fallback). We deliberately don't @import the webfont
+   from Google: it adds an external request on every popup open — a privacy leak
+   for a wallet tool — with no functional gain over the monospace fallback. */
 @import "./shadow/tokens.css";
 @tailwind base;
 @tailwind components;

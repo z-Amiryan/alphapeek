@@ -37,14 +37,16 @@ export function RecentLookups({ reloadToken }: Props) {
     return <p className="text-[12px] text-dim">No recent lookups yet.</p>
   }
 
+  // Read-only history (UX §7): rows are display-only, so no pointer/hover
+  // affordance. Rendered as a list for assistive-tech semantics.
   return (
-    <div className="-mx-[13px]">
+    <ul className="-mx-[13px]">
       {entries.map((entry) => {
         const { label, value } = describe(entry)
         return (
-          <div
+          <li
             key={entry.key}
-            className="flex cursor-pointer items-center gap-[10px] border-t border-line px-[13px] py-[9px] transition-colors duration-tm hover:bg-bg"
+            className="flex items-center gap-[10px] border-t border-line px-[13px] py-[9px]"
           >
             <span className="text-[12px] font-bold tracking-[0.02em]">
               {truncateAddress(entry.addr)}
@@ -53,9 +55,9 @@ export function RecentLookups({ reloadToken }: Props) {
               {label}
             </span>
             <span className="text-[12px] font-bold tabular-nums">{value}</span>
-          </div>
+          </li>
         )
       })}
-    </div>
+    </ul>
   )
 }

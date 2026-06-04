@@ -8,7 +8,7 @@ Before any deployment work, the user must have:
 - [ ] A Cloudflare account (free tier is fine)
 - [ ] A CoinStats Public API account with API key ([https://openapi.coinstats.app](https://openapi.coinstats.app))
 - [ ] A Chrome Web Store developer account ($5 one-time fee, set up by the user)
-- [ ] GitHub repo created (under user's personal account, outside CoinstatsHQ org)
+- [ ] GitHub repo created (under user's personal account)
 
 ## 1. Initial project setup (agent runs autonomously)
 

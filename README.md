@@ -18,7 +18,7 @@
 
 **AlphaPeek** is an open-source Chrome extension (Manifest V3) for **X / Twitter**. It detects **EVM wallet and token addresses** in the timeline and, when you hover one, shows a compact info card — a wallet's **balance, top holdings, and allocation**, or a token's **price, market cap, volume, and 7-day chart** — without ever leaving the page. No login, no wallet connection, no setup. Crypto data is powered by the [CoinStats Public API](https://coinstats.app/api-docs/).
 
-> **Why it exists:** addresses fly past on Crypto Twitter constantly, and checking each one means copy-pasting into a block explorer. AlphaPeek turns that into a hover. It's also a reference implementation of what the CoinStats Public API can do.
+> **Why it exists:** addresses fly past on Crypto Twitter constantly, and checking each one means copy-pasting into a block explorer. AlphaPeek turns that into a hover.
 
 ## Features
 
@@ -118,7 +118,7 @@ curl "http://localhost:8787/v1/lookup?chain=ethereum&addr=0x95ad61b0a150d79219dc
 v0.1, pre-release. Deliberately scoped (full list in [`docs/ROADMAP.md`](docs/ROADMAP.md)):
 
 - **EVM only**, **X / Twitter only** — more chains and sites in v0.2+.
-- **Trending/established-token inspector, not a launch-sniper.** CoinStats indexes new tokens within a few hours, so a minutes-old contract resolves as `unknown` by design.
+- **Trending/established-token inspector, not a launch-sniper.** CoinStats Public API indexes new tokens within a few hours, so a minutes-old contract resolves as `unknown` by design.
 - **No token-risk scoring, `$TICKER` detection, PnL, or watchlist yet** — see the roadmap.
 - Chain inference from tweet text is best-effort (X has no URL context).
 

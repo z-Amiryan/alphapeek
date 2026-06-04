@@ -15,7 +15,7 @@ import { Splash } from './Splash'
 const REPO_URL = 'https://github.com/z-Amiryan/alphapeek'
 const ISSUES_URL = 'https://github.com/z-Amiryan/alphapeek/issues'
 const PRIVACY_URL = 'https://z-amiryan.github.io/alphapeek/privacy.html'
-const COINSTATS_URL = 'https://coinstats.app'
+const COINSTATS_PUBLIC_API_URL = 'https://coinstats.app/api-docs/'
 // Set once the extension is live on the Web Store and its id is known; until then the
 // "Rate it" link is hidden rather than shipped broken.
 const WEBSTORE_ID = ''
@@ -155,12 +155,12 @@ export function App() {
               ) : null}
               <span aria-hidden="true">·</span>
               <a
-                href={COINSTATS_URL}
+                href={COINSTATS_PUBLIC_API_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="transition-colors duration-tm hover:text-fg"
               >
-                Powered by CoinStats
+                Powered by CoinStats Public API
               </a>
             </div>
             <p className="mt-1.5 text-[9px] leading-tight text-dim">

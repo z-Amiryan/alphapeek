@@ -70,7 +70,7 @@ alphapeek/
 │   ├── worker/
 │   │   ├── src/
 │   │   │   ├── index.ts                  # Hono router (see §4)
-│   │   │   ├── coinstats.ts              # CoinStats client + normalizers
+│   │   │   ├── coinstats.ts              # CoinStats Public Api client + normalizers
 │   │   │   ├── cache.ts                  # read-through KV cache helper
 │   │   │   ├── ratelimit.ts              # per-IP limit + daily cap
 │   │   │   └── env.ts                    # Env bindings + WORKER_VERSION

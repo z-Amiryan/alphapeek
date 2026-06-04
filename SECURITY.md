@@ -17,7 +17,7 @@ security fixes.
 Report privately via [GitHub Security Advisories](https://github.com/z-Amiryan/alphapeek/security/advisories/new).
 This keeps the report confidential until a fix is available. You can expect an
 initial response within a few days. If you prefer email, contact
-zhora.amiryan@coinstats.app.
+jora.amiryan12@gmail.com.
 
 Please include:
 

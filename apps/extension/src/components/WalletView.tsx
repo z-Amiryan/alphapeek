@@ -1,11 +1,12 @@
-// Wallet card (UX §3C) in the Terminal pattern. No PnL in v0.1 — extra credit
-// cost, deliberate v0.2 call. Footer links the block explorer (always correct)
-// rather than a guessed CoinStats per-address URL with no documented format.
+// Wallet card (UX §3C) in the Terminal pattern. All-time PnL (v0.2) reads the
+// smart-money signal — CoinStats has no 30d bucket, so all-time is the surfaced
+// window. Footer links the block explorer (always correct) rather than a guessed
+// CoinStats per-address URL with no documented format.
 import type { Holding, WalletSummary } from '@alphapeek/shared'
 import { CHAIN_LABELS } from '@alphapeek/shared'
 import { useState } from 'react'
 import { coinStatsCoinUrl, explorerAddressUrl, explorerName } from '@/lib/chain'
-import { formatShare, formatUsd, truncateAddress } from '@/lib/format'
+import { formatCompact, formatPct, formatShare, formatUsd, truncateAddress } from '@/lib/format'
 import { ArrowOut } from './icons'
 import { BTN } from './ui'
 
@@ -101,6 +102,20 @@ export function WalletView({ wallet }: Props) {
         <div className="mt-1 text-[30px] font-bold tracking-[-0.02em] tabular-nums">
           {formatUsd(wallet.totalUsd)}
         </div>
+
+        {wallet.pnl ? (
+          <div className="mt-[6px] flex items-baseline gap-2">
+            <span className="text-[9px] uppercase tracking-[0.14em] text-dim">PnL · All-time</span>
+            <span
+              className={`text-[13px] font-bold tabular-nums ${
+                wallet.pnl.pct >= 0 ? 'text-up' : 'text-down'
+              }`}
+            >
+              {wallet.pnl.absUsd >= 0 ? '+' : ''}
+              {formatCompact(wallet.pnl.absUsd)} · {formatPct(wallet.pnl.pct)}
+            </span>
+          </div>
+        ) : null}
 
         {has ? (
           <>

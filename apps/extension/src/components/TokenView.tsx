@@ -4,6 +4,8 @@ import type { Chain, TokenFlag, TokenSummary } from '@alphapeek/shared'
 import { coinStatsCoinUrl, dexScreenerUrl } from '@/lib/chain'
 import { formatCompact, formatPct, formatPrice } from '@/lib/format'
 import { ArrowOut } from './icons'
+import { SafetyBadge } from './SafetyBadge'
+import { SafetyDetails } from './SafetyDetails'
 import { Sparkline } from './Sparkline'
 import { BTN } from './ui'
 
@@ -35,6 +37,8 @@ export function TokenView({ token, chain, addr }: Props) {
           LIVE
         </span>
       </div>
+
+      {token.safety ? <SafetyBadge safety={token.safety} /> : null}
 
       <div className="px-[13px] py-[14px]">
         <div className="flex items-center justify-between gap-2">
@@ -89,6 +93,8 @@ export function TokenView({ token, chain, addr }: Props) {
           </div>
         </div>
       </div>
+
+      {token.safety ? <SafetyDetails safety={token.safety} /> : null}
 
       <div className="flex border-t-[1.5px] border-line">
         <a

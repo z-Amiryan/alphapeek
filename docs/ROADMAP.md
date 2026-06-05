@@ -29,7 +29,6 @@ working across both chains; BSC required slug fixes (see SPEC § 4).
 - Unlisted Chrome Web Store beta
 
 **Explicitly out of scope (will reject if attempted):**
-- Token Risks / Hexens integration → v0.2
 - $TICKER detection → v0.2
 - Solana, BTC, or non-EVM chain support → v0.2 or v1.1
 - Any site other than X → v0.2+
@@ -42,15 +41,28 @@ working across both chains; BSC required slug fixes (see SPEC § 4).
 - Wallet PnL → v0.2 (extra credit cost, deliberate v0.2 decision)
 - DeFi positions → v0.2
 
-## v0.2 — Safety + Spread (NEXT)
+## v0.2 — Safety-first (NEXT)
 
-**Goal:** Activate the unique value proposition (Token Risks) and broaden surface area.
+**Goal:** Make safety the headline. Lead with a free contract-risk verdict on every
+token card (the unique value proposition now that Hexens/Token Risks is out), plus a
+smart-money PnL read on wallets — the two highest degen-value signals for Crypto
+Twitter. Built this cut (status below); breadth items deferred within v0.2.
 
-**Added scope:**
-- **Token Risks integration** — Hexens risk score on token cards, severity-ranked findings (top 3 in hover, full list on expand). This becomes the marketing headline.
+**This cut (built):**
+- **Token Safety — GoPlus (headline VP).** Free, keyless contract scan
+  (`api.gopluslabs.io`) on every token card: a `safe` / `caution` / `danger`
+  verdict + buy/sell tax + severity-ranked findings. Verdict rules are **calibrated
+  against a live trusted basket** (SHIB/LINK/UNI/AAVE/PEPE/CAKE/BRETT) — `mintable`,
+  `proxy`, `blacklist` fire on legit tokens so they're informational *notes*, never
+  verdict-driving. Best-effort: the card renders fully if the scan is unavailable.
+- **Wallet PnL (all-time).** From CoinStats `GET /wallet/pl`, surfaced near total
+  balance. CoinStats exposes fixed buckets (allTime / 24h / unrealized / realized) —
+  **no 30-day window**, so the surfaced signal is **all-time** PnL (strongest "ever
+  been profitable" read). Extra credit cost (25cr), only spent on confirmed wallets.
+
+**Deferred within v0.2 / later (still planned, not this cut):**
 - **Inline badge mode** (opt-in setting): tiny colored dot after each detected address, scanned on viewport entry. Hover-only stays as default for privacy/credit reasons.
 - **$TICKER detection** with a whitelist of top 1000 coins (preloaded as a Set in the extension)
-- **Wallet PnL** on hover card (30-day)
 - **DeFi positions summary** ("$X across N protocols")
 - **New sites:** Etherscan family (etherscan, basescan, arbiscan, bscscan, polygonscan, optimistic.etherscan, snowtrace), DEXScreener, GeckoTerminal
 - **Chain inference v2:** URL context (path-based detection on block explorers)

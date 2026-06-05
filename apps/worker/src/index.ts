@@ -9,8 +9,10 @@ import {
   fetchFearGreed,
   fetchTokenDetail,
   fetchWallet,
+  fetchWalletPnl,
 } from './coinstats'
 import { type Env, WORKER_VERSION } from './env'
+import { fetchTokenSafety } from './goplus'
 import { withinDailyCap, withinIpLimit } from './ratelimit'
 
 const ADDRESS_RE = /^0x[a-f0-9]{40}$/
@@ -25,6 +27,9 @@ const TOKEN_TTL = 60
 // TTL also cuts the ~3-credit chart call. Cached apart from the token so a chart hiccup
 // degrades to "no chart this request" (retried next time), never a blank-for-TOKEN_TTL.
 const CHART_TTL = 900
+// Contract-safety properties change slowly, but an ownership renounce / blacklist
+// flip should surface same-day, so 6h balances freshness against GoPlus load.
+const SAFETY_TTL = 6 * 60 * 60
 const WALLET_TTL = 300
 const FEAR_GREED_TTL = 300
 
@@ -121,8 +126,22 @@ async function resolve(env: Env, addr: string, chain: Chain): Promise<LookupResu
   if (kind && kind !== NOT_A_TOKEN) {
     const token = await cached(env, `token:${kind}`, TOKEN_TTL, () => fetchTokenDetail(env, kind))
     if (token) {
-      const sparkline = await cached(env, `chart:${kind}`, CHART_TTL, () => fetchChart(env, kind))
-      return { kind: 'token', data: { ...token, sparkline: sparkline ?? [] } }
+      // Chart and safety scan are independent, best-effort, and each cached on its
+      // own TTL — fan them out in parallel so neither stacks onto the token latency.
+      const [sparkline, safety] = await Promise.all([
+        cached(env, `chart:${kind}`, CHART_TTL, () => fetchChart(env, kind)),
+        cached(env, `safety:${chain}:${addr}`, SAFETY_TTL, () =>
+          fetchTokenSafety(env, addr, chain),
+        ),
+      ])
+      return {
+        kind: 'token',
+        data: {
+          ...token,
+          sparkline: sparkline ?? [],
+          ...(safety ? { safety } : {}),
+        },
+      }
     }
   }
 
@@ -130,7 +149,12 @@ async function resolve(env: Env, addr: string, chain: Chain): Promise<LookupResu
     fetchWallet(env, addr, chain),
   )
   if (wallet && wallet.holdings.length > 0 && wallet.totalUsd > 0) {
-    return { kind: 'wallet', data: wallet }
+    // Only spend the extra 25-credit PnL call once the address is a confirmed
+    // wallet — never on token/unknown fallthroughs. Best-effort + cached.
+    const pnl = await cached(env, `pnl:${chain}:${addr}`, WALLET_TTL, () =>
+      fetchWalletPnl(env, addr, chain),
+    )
+    return { kind: 'wallet', data: { ...wallet, ...(pnl ? { pnl } : {}) } }
   }
 
   return { kind: 'unknown' }

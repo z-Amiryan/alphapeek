@@ -20,6 +20,8 @@ id = "0b8e626966324c81801f5616a5a4e8a0"
 # CoinStats credit spend. Raise per DEPLOYMENT.md §10/§11.
 DAILY_CAP = "5000"
 COINSTATS_BASE_URL = "https://openapiv1.coinstats.app"
+# GoPlus Token Security — free, keyless public API (token safety scan, v0.2).
+GOPLUS_BASE_URL = "https://api.gopluslabs.io/api/v1"
 
 # Secret (never commit) — set with:
 #   npx wrangler secret put COINSTATS_API_KEY

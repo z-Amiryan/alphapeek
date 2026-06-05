@@ -1,4 +1,11 @@
-import type { Chain, Holding, TokenFlag, TokenSummary, WalletSummary } from '@alphapeek/shared'
+import type {
+  Chain,
+  Holding,
+  TokenFlag,
+  TokenSummary,
+  WalletPnl,
+  WalletSummary,
+} from '@alphapeek/shared'
 import type { Env } from './env'
 
 // USD stablecoins (uppercased symbols incl. common bridged variants, e.g. Binance-Peg
@@ -279,6 +286,58 @@ export async function fetchWallet(env: Env, addr: string, chain: Chain): Promise
     connectionId: WALLET_CHAIN[chain],
   })
   return normalizeWallet(addr, chain, payload)
+}
+
+// CoinStats `/wallet/pl` profit buckets are sometimes a plain number (USD / percent)
+// and sometimes a `{ USD, BTC, ETH }` object — read either. Returns null (not 0) when
+// the bucket is absent so a real $0 PnL isn't conflated with "no data".
+function readPnlBucket(rec: Record<string, unknown>, bucket: string): number | null {
+  const v = rec[bucket]
+  if (typeof v === 'number' && Number.isFinite(v)) return v
+  if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) return Number(v)
+  const obj = asRecord(v)
+  if (obj) {
+    const usd = obj.USD ?? obj.usd
+    if (typeof usd === 'number' && Number.isFinite(usd)) return usd
+    if (typeof usd === 'string' && usd.trim() !== '' && Number.isFinite(Number(usd))) {
+      return Number(usd)
+    }
+  }
+  return null
+}
+
+// CoinStats has no 30-day bucket; we surface all-time PnL from `summary` (see
+// WalletPnl). Returns null when neither the absolute nor the percent all-time
+// figure is present, so the wallet card simply omits the PnL line.
+export function normalizeWalletPnl(payload: unknown): WalletPnl | null {
+  const root = asRecord(payload) ?? {}
+  const summary = asRecord(root.summary)
+  if (!summary) return null
+  const profit = asRecord(summary.profit)
+  const profitPercent = asRecord(summary.profitPercent)
+  const absUsd = profit ? readPnlBucket(profit, 'allTime') : null
+  const pct = profitPercent ? readPnlBucket(profitPercent, 'allTime') : null
+  if (absUsd === null && pct === null) return null
+  return { window: 'all_time', absUsd: absUsd ?? 0, pct: pct ?? 0 }
+}
+
+// Best-effort: a PnL failure (e.g. a 429 on the extra call) must NOT 503 the whole
+// wallet lookup, so swallow to null and let the card render without the PnL line.
+// 25 credits — only call this once a wallet is confirmed (see resolve() in index.ts).
+export async function fetchWalletPnl(
+  env: Env,
+  addr: string,
+  chain: Chain,
+): Promise<WalletPnl | null> {
+  const payload = await cs(env, '/wallet/pl', {
+    address: addr,
+    connectionId: WALLET_CHAIN[chain],
+  }).catch((err: unknown) => {
+    console.warn(`wallet pnl fetch failed for ${addr}: ${String(err)}`)
+    return null
+  })
+  if (payload === null) return null
+  return normalizeWalletPnl(payload)
 }
 
 export function normalizeFearGreed(payload: unknown): { value: number; label: string } {

@@ -120,6 +120,10 @@ alphapeek/
 
 **No other dependencies without user approval.** No date libraries (use `Intl.DateTimeFormat`), no http libraries (use `fetch`), no utility libraries (use native methods).
 
+> **External data sources (not npm packages):** v0.1 = CoinStats only. v0.2 adds
+> **GoPlus Token Security** (`api.gopluslabs.io`, free + keyless) for contract-safety
+> scans — Worker-side `fetch` only, never called from the extension, no package added.
+
 ## 4. Cloudflare Worker spec
 
 ### Endpoints
@@ -183,6 +187,8 @@ Returns `{ ok: true, version: string }`. No auth, no rate limit.
 | KV `CACHE` | `token:{coinId}` | 60 seconds | Price moves |
 | KV `CACHE` | `chart:{coinId}` | 900 seconds | 7d sparkline is hourly data; cached apart from `token` so a flaky chart call can't pin a blank sparkline, and to cut the ~3-credit chart cost |
 | KV `CACHE` | `wallet:{chain}:{addr}` | 300 seconds | Balances change but slowly |
+| KV `CACHE` | `pnl:{chain}:{addr}` | 300 seconds | All-time PnL (v0.2); tracks the wallet TTL |
+| KV `CACHE` | `safety:{chain}:{addr}` | 6 hours | GoPlus contract-safety scan (v0.2); slow-moving, but a renounce/blacklist flip should surface same-day |
 
 > The Worker sends `Cache-Control: public, max-age=…` on `/v1/lookup` and `/v1/fear-greed`
 > responses (a hint for the browser / service-worker HTTP cache). There is intentionally
@@ -208,8 +214,28 @@ Rate limit state lives in `RATELIMIT` KV namespace with auto-expiry.
 | Token details | `GET /coins/{coinId}` | ~1 credit |
 | Token 7d chart | `GET /coins/charts?coinIds={coinId}&period=1w` | ~3 credits |
 | Wallet balance | `GET /wallet/balance?address={addr}&connectionId={connSlug}` | **40 credits** |
+| Wallet PnL (v0.2) | `GET /wallet/pl?address={addr}&connectionId={connSlug}` | **25 credits** |
 
 (Costs are estimates — verify against `https://coinstats.app/docs/multipliers.md` and the per-endpoint docs.)
+
+**Wallet PnL (v0.2):** `/wallet/pl` exposes fixed profit buckets — `allTime`,
+`hour24`, `lastTrade`, `unrealized`, `realized` — and **no 30-day window**. We
+surface **all-time** PnL (`summary.profit.allTime` + `summary.profitPercent.allTime`,
+each a number or a `{ USD, BTC, ETH }` object). It is only fetched once an address is
+a confirmed wallet (never on token/unknown fallthroughs), to avoid the 25-credit cost
+on misses. Best-effort: a PnL failure doesn't fail the wallet card.
+
+### GoPlus Token Security (v0.2 — external, free, keyless)
+
+Not a CoinStats endpoint. `GET {GOPLUS_BASE_URL}/token_security/{chainId}?contract_addresses={addr}`
+(`api.gopluslabs.io/api/v1`, numeric chain ids `1/56/137/8453/42161/10/43114`). **No
+API key, no CoinStats credit, no daily-cap impact.** Fanned out in parallel with the
+chart call on the token path; `apps/worker/src/goplus.ts` normalizes the raw `result[addr]`
+record into a `TokenSafety` verdict (`safe`/`caution`/`danger`). Verdict rules are
+**calibrated against a live trusted basket** — `is_mintable`/`is_proxy`/`is_blacklisted`
+fire on legit tokens (CAKE/AAVE/PEPE), so they're informational `notes`, never
+verdict-driving. Best-effort: a scan failure or unsupported chain leaves `safety`
+undefined and the card renders without it.
 
 **Chain slugs differ PER ENDPOINT — three namespaces (verified live 2026-06-02).** Do not share
 one map. `/coins?blockchains=` uses CoinStats' internal "chain" slugs; `/wallet/balance` uses the
@@ -482,7 +508,6 @@ If a budget is exceeded after honest effort, document the gap in the PR and deci
 
 - **EVM only** — Solana, BTC, others in v0.2+
 - **X only** — Etherscan, DEXScreener, Telegram, Discord in v0.2+
-- **No Token Risks** — Hexens risk scoring lands in v0.2
 - **No $TICKER** detection — lands in v0.2
 - **No persistent watchlist** — in v0.3 with optional account
 - **No alerts/notifications** — in v0.3

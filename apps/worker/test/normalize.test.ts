@@ -4,7 +4,9 @@ import {
   normalizeFearGreed,
   normalizeToken,
   normalizeWallet,
+  normalizeWalletPnl,
 } from '../src/coinstats'
+import { normalizeSafety } from '../src/goplus'
 
 const ADDRESS_RE = /^0x[a-f0-9]{40}$/
 
@@ -119,6 +121,104 @@ describe('normalizeChart', () => {
         },
       ]),
     ).toEqual([100, 110, 105])
+  })
+})
+
+describe('normalizeSafety', () => {
+  // GoPlus encodes booleans as "0"/"1" strings and taxes as decimal fractions.
+  it('flags a honeypot as danger', () => {
+    const s = normalizeSafety({ is_honeypot: '1', buy_tax: '0', sell_tax: '0' })
+    expect(s.verdict).toBe('danger')
+    expect(s.flags[0]).toBe('honeypot')
+    expect(s.source).toBe('goplus')
+  })
+
+  it('treats cannot_sell_all as danger', () => {
+    expect(normalizeSafety({ cannot_sell_all: '1' }).verdict).toBe('danger')
+  })
+
+  it('rates a clean, verified contract as safe with no flags or notes', () => {
+    const s = normalizeSafety({
+      is_honeypot: '0',
+      buy_tax: '0',
+      sell_tax: '0',
+      is_open_source: '1',
+      is_proxy: '0',
+      is_mintable: '0',
+    })
+    expect(s.verdict).toBe('safe')
+    expect(s.flags).toEqual([])
+    expect(s.notes).toEqual([])
+    expect(s.buyTaxPct).toBe(0)
+  })
+
+  it('converts tax fractions to percent and cautions above the threshold', () => {
+    const s = normalizeSafety({ buy_tax: '0.03', sell_tax: '0.15', is_open_source: '1' })
+    expect(s.sellTaxPct).toBe(15)
+    expect(s.buyTaxPct).toBe(3)
+    expect(s.verdict).toBe('caution')
+    // High sell tax outranks high buy tax in severity order; 3% buy isn't flagged.
+    expect(s.flags).toContain('high_sell_tax')
+    expect(s.flags).not.toContain('high_buy_tax')
+  })
+
+  it('cautions on owner privileges and unverified source (verdict-driving)', () => {
+    const s = normalizeSafety({ is_open_source: '0', can_take_back_ownership: '1' })
+    expect(s.verdict).toBe('caution')
+    expect(s.flags).toEqual(expect.arrayContaining(['owner_privileges', 'unverified_source']))
+  })
+
+  // Calibrated against live data: CAKE is mintable, AAVE is a proxy, PEPE has a
+  // blacklist fn — all trusted. These must be informational notes, not cautions.
+  it('keeps mintable/proxy/blacklist as informational notes (stays safe)', () => {
+    const s = normalizeSafety({
+      is_honeypot: '0',
+      buy_tax: '0',
+      sell_tax: '0',
+      is_open_source: '1',
+      is_mintable: '1',
+      is_proxy: '1',
+      is_blacklisted: '1',
+    })
+    expect(s.verdict).toBe('safe')
+    expect(s.flags).toEqual([])
+    expect(s.notes).toEqual(expect.arrayContaining(['mintable', 'proxy', 'blacklist']))
+  })
+
+  it('returns null taxes when the scan omits them', () => {
+    const s = normalizeSafety({ is_open_source: '1' })
+    expect(s.buyTaxPct).toBeNull()
+    expect(s.sellTaxPct).toBeNull()
+    expect(s.verdict).toBe('safe')
+  })
+})
+
+describe('normalizeWalletPnl', () => {
+  it('reads all-time profit + percent from summary (numeric buckets)', () => {
+    const pnl = normalizeWalletPnl({
+      summary: {
+        profit: { allTime: 840210, hour24: 12, unrealized: 100, realized: 200 },
+        profitPercent: { allTime: 53.2, hour24: 0.5 },
+      },
+    })
+    expect(pnl).toEqual({ window: 'all_time', absUsd: 840210, pct: 53.2 })
+  })
+
+  it('reads the USD member when a bucket is a { USD, BTC, ETH } object', () => {
+    const pnl = normalizeWalletPnl({
+      summary: {
+        profit: { allTime: { USD: -1500, BTC: -0.02 } },
+        profitPercent: { allTime: -8.5 },
+      },
+    })
+    expect(pnl?.absUsd).toBe(-1500)
+    expect(pnl?.pct).toBe(-8.5)
+  })
+
+  it('returns null when summary or all-time figures are absent', () => {
+    expect(normalizeWalletPnl({})).toBeNull()
+    expect(normalizeWalletPnl({ summary: { profit: { hour24: 5 } } })).toBeNull()
+    expect(normalizeWalletPnl(null)).toBeNull()
   })
 })
 

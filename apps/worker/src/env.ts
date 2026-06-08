@@ -5,6 +5,8 @@ export type Env = {
   RATELIMIT: KVNamespace
   DAILY_CAP: string
   COINSTATS_BASE_URL: string
+  // GoPlus token-security base (free, keyless public API). A plain var, not a secret.
+  GOPLUS_BASE_URL: string
   COINSTATS_API_KEY: string
 }
 

@@ -37,6 +37,43 @@ export function isChain(value: string): value is Chain {
  */
 export type TokenFlag = 'low_liquidity' | 'high_volatility'
 
+/**
+ * Worker-computed safety verdict from a third-party contract scan (GoPlus). Unlike
+ * `TokenFlag` (our own market-data heuristic), this reflects on-chain contract
+ * properties — honeypot, taxes, mint/owner privileges. Still a third-party signal,
+ * NOT a guarantee: surface it with a "not financial advice" disclaimer.
+ */
+export type SafetyVerdict = 'safe' | 'caution' | 'danger' | 'unknown'
+
+export type SafetyFlag =
+  | 'honeypot'
+  | 'cant_sell_all'
+  | 'high_buy_tax'
+  | 'high_sell_tax'
+  | 'mintable'
+  | 'owner_privileges'
+  | 'proxy'
+  | 'unverified_source'
+  | 'blacklist'
+  | 'transfer_pausable'
+
+export type TokenSafety = {
+  verdict: SafetyVerdict
+  /** Buy/sell tax as a percentage (e.g. 5 = 5%). Null when the scan didn't report it. */
+  buyTaxPct: number | null
+  sellTaxPct: number | null
+  /** Verdict-driving risk findings, severity-ranked (most-severe first). */
+  flags: SafetyFlag[]
+  /**
+   * Informational capabilities (mintable supply, proxy/upgradeable, blacklist
+   * function) — common on legitimate tokens (e.g. CAKE is mintable, AAVE is a
+   * proxy), so they're surfaced for diligence but NEVER raise the verdict.
+   */
+  notes: SafetyFlag[]
+  /** Attribution for the UI disclaimer; only source in v0.2. */
+  source: 'goplus'
+}
+
 export type TokenSummary = {
   coinId: string
   name: string
@@ -50,6 +87,12 @@ export type TokenSummary = {
   sparkline: number[]
   /** Derived market-data hints (low_liquidity, high_volatility). Never a safety guarantee. */
   flags: TokenFlag[]
+  /**
+   * Third-party contract-safety scan. Optional/best-effort: absent when the scan
+   * is unavailable, rate-limited, or the chain is unsupported by the provider —
+   * the card renders fully without it.
+   */
+  safety?: TokenSafety
 }
 
 export type Holding = {
@@ -67,6 +110,21 @@ export type Holding = {
   pct: number
 }
 
+/**
+ * Wallet performance. "Is this wallet actually winning?" — the smart-money read
+ * for KOL/whale addresses. From CoinStats `/wallet/pl` (no extra external API),
+ * extra credit cost → a deliberate v0.2 addition. CoinStats exposes fixed buckets
+ * (allTime, 24h, unrealized, realized) — NOT a 30-day window — so v0.2 surfaces
+ * all-time PnL, the strongest "ever been profitable" signal.
+ */
+export type WalletPnl = {
+  window: 'all_time'
+  /** Absolute profit/loss in USD (may be negative). */
+  absUsd: number
+  /** Profit/loss as a percentage (may be negative). */
+  pct: number
+}
+
 export type WalletSummary = {
   address: string
   chain: Chain
@@ -79,6 +137,11 @@ export type WalletSummary = {
    * fall outside the displayed holdings. "Risk-on vs parked in stables" signal.
    */
   stablecoinPct: number
+  /**
+   * 30-day PnL. Optional/best-effort: absent when CoinStats doesn't return it for
+   * the address — the card renders fully without it.
+   */
+  pnl?: WalletPnl
 }
 
 export type LookupResult =

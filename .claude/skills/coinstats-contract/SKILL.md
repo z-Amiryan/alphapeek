@@ -34,7 +34,14 @@ Query params:
     "marketCap": 112000000000,
     "volume": 45000000000,
     "sparkline": [0.999, 1.0, 1.001], // ~168 hourly points; may be []
-    "flags": [] // 'low_liquidity' | 'high_volatility' — market-data hints, NOT a safety verdict
+    "flags": [], // 'low_liquidity' | 'high_volatility' — market-data hints, NOT a safety verdict
+    "safety": { // v0.2, OPTIONAL (GoPlus) — absent if scan unavailable/chain unsupported
+      "verdict": "safe", // 'safe' | 'caution' | 'danger' | 'unknown'
+      "buyTaxPct": 0, "sellTaxPct": 0, // number | null
+      "flags": [], // verdict-driving risks, severity-ranked (honeypot, high_sell_tax, …)
+      "notes": [], // informational capabilities (mintable/proxy/blacklist) — never raise verdict
+      "source": "goplus"
+    }
   }
 }
 ```
@@ -49,7 +56,12 @@ Query params:
     "holdings": [ // top 5, USD-desc
       { "symbol": "ETH", "name": "Ethereum", "imgUrl": "https://…", "usd": 9000.0, "pct": 72.9 }
     ],
-    "stablecoinPct": 12.4 // 0-100, computed over the FULL holdings before the top-5 slice
+    "stablecoinPct": 12.4, // 0-100, computed over the FULL holdings before the top-5 slice
+    "pnl": { // v0.2, OPTIONAL — absent if CoinStats returns no PnL for the address
+      "window": "all_time", // CoinStats /wallet/pl has NO 30d bucket; all-time is surfaced
+      "absUsd": -1270353.73, // may be negative (realized losses on exited positions)
+      "pct": -13.74
+    }
   }
 }
 ```
@@ -58,7 +70,7 @@ Query params:
 { "kind": "unknown" }
 ```
 
-Resolution order (SPEC §4): kind-cache (token contract vs not) → if token, token detail+chart → else wallet balance → else `unknown`. The expensive `/wallet/balance` call (40 credits) is gated behind the long-lived kind cache.
+Resolution order (SPEC §4): kind-cache (token contract vs not) → if token, token detail + chart **+ GoPlus safety scan (parallel, best-effort)** → else wallet balance **+ /wallet/pl all-time PnL (only once a wallet is confirmed)** → else `unknown`. The expensive `/wallet/balance` call (40 credits) is gated behind the long-lived kind cache; `safety` (free) and `pnl` (25cr) are optional and never block or fail the card.
 
 ### `GET /v1/fear-greed`
 `200 FearGreed` → `{ "value": number, "label": string }`. Globally cached 300s.
@@ -79,10 +91,13 @@ Resolution order (SPEC §4): kind-cache (token contract vs not) → if token, to
 |---|---|---|---|
 | KV `CACHE` | `kind:{chain}:{addr}` | 30 days | address type is stable; gates the wallet call |
 | KV `CACHE` | `token:{coinId}` | 60s | price moves |
+| KV `CACHE` | `chart:{coinId}` | 900s | hourly 7d series; cached apart from token |
+| KV `CACHE` | `safety:{chain}:{addr}` | 6h | GoPlus scan (v0.2); slow-moving, surfaces renounce/blacklist flips same-day |
 | KV `CACHE` | `wallet:{chain}:{addr}` | 300s | balances move slowly |
+| KV `CACHE` | `pnl:{chain}:{addr}` | 300s | all-time PnL (v0.2); tracks the wallet TTL |
 | KV `CACHE` | `feargreed:latest` | 300s | shared globally |
 
-CoinStats credit costs: detect ~5, token detail ~1, chart ~3, **wallet/balance 40**. The kind cache is what keeps repeated hovers of one address from re-burning 40 credits — never bypass `cached()`.
+CoinStats credit costs: detect ~5, token detail ~1, chart ~3, **wallet/balance 40**, **wallet/pl 25** (v0.2). GoPlus token-safety is **free + keyless** (no CoinStats credit, no daily-cap). The kind cache is what keeps repeated hovers of one address from re-burning 40 credits — never bypass `cached()`.
 
 ## Upstream slug gotchas (verified 2026-06-02 — full table in SPEC §4)
 
@@ -109,11 +124,19 @@ ORIGIN='chrome-extension://abcdefghijklmnopabcdefghijklmnop'
 # health — no key needed
 curl -s "$BASE/health"
 
-# token (USDT on Ethereum) → expect kind:"token"
+# token (SHIB on Ethereum) → expect kind:"token" with safety.verdict:"safe" (v0.2)
+# USDT/USDC aren't in CoinStats' contract index (return unknown) — use SHIB/PEPE/FLOKI.
 curl -s -H "Origin: $ORIGIN" \
-  "$BASE/v1/lookup?addr=0xdac17f958d2ee523a2206206994597c13d831ec7&chain=ethereum"
+  "$BASE/v1/lookup?addr=0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce&chain=ethereum"
 
-# wallet (vitalik.eth) → expect kind:"wallet" with holdings, OR kind:"unknown"
+# caution token (FLOKI) → safety.verdict:"caution", flags:["owner_privileges"] (v0.2)
+curl -s -H "Origin: $ORIGIN" \
+  "$BASE/v1/lookup?addr=0xcf0c122c6b73ff809c693db761e7baebe62b6a2e&chain=ethereum"
+
+# GoPlus directly (free, no key) — sanity-check the upstream the worker normalizes:
+curl -s "https://api.gopluslabs.io/api/v1/token_security/1?contract_addresses=0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce"
+
+# wallet (vitalik.eth) → expect kind:"wallet" with holdings + pnl.window:"all_time" (v0.2), OR kind:"unknown"
 curl -s -H "Origin: $ORIGIN" \
   "$BASE/v1/lookup?addr=0xd8da6bf26964af9d7eed9e03e53415d37aa96045&chain=ethereum"
 
@@ -130,6 +153,7 @@ curl -s -i -X OPTIONS -H "Origin: $ORIGIN" "$BASE/v1/lookup?addr=0x0" | head -n 
 Sanity rules:
 - Every 200 body matches the `LookupResult` / `FearGreed` / `Health` shape in `packages/shared/src/types.ts`. If you change a field, change it there first.
 - A token contract must resolve to `kind:"token"`, not `kind:"unknown"` — if every address comes back `token`, the `/coins` filter param is wrong (must be plural `contractAddresses`).
+- `safety` and `pnl` are OPTIONAL — a token card with no `safety` (GoPlus down/unsupported chain) or a wallet with no `pnl` is valid, not a bug. GoPlus verdict is calibrated: `mintable`/`proxy`/`blacklist` land in `notes` (don't escalate the verdict); only honeypot/can't-sell/high-tax/owner-takeback/pausable/unverified drive it. If a trusted token (e.g. CAKE) shows `caution`, the partition regressed.
 - If **BSC** tokens come back `unknown` or BSC lookups 503, check the slugs: `/coins` needs `binance_smart` and `/wallet/balance` needs `connectionId=binancesmartchain`. A ~1h-old token returning `unknown` is expected (indexing lag), not a bug.
 - Never print or paste `COINSTATS_API_KEY` into a terminal, log, or commit.
 

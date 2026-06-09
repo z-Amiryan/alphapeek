@@ -13,5 +13,6 @@ export type Env = {
   COINSTATS_API_KEY: string
 }
 
-// Surfaced at /health; bump on each deploy (DEPLOYMENT.md §7). v2026.06.08 = v0.2.
-export const WORKER_VERSION = 'v2026.06.08'
+// Surfaced at /health; bump on each deploy (DEPLOYMENT.md §7). v2026.06.09 = v0.2 +
+// DexScreener fallback, $TICKER (/v1/coin) + long-tail (/v1/symbol), short NOT_A_TOKEN TTL.
+export const WORKER_VERSION = 'v2026.06.09'

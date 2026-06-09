@@ -13,6 +13,9 @@ type Props = {
 }
 
 export function UnknownView({ addr, chain }: Props) {
+  // A cashtag lookup ($TICKER / long-tail) has no hovered address, so the address line and
+  // the explorer/DexScreener links (which need one) would render empty/broken — omit them.
+  const hasAddr = addr.length > 0
   return (
     <div>
       <div className="flex items-center gap-2 border-b-[1.5px] border-line px-[13px] py-[9px] text-dim">
@@ -20,33 +23,38 @@ export function UnknownView({ addr, chain }: Props) {
         <span className="text-[11px] font-bold uppercase tracking-[0.1em]">No Data</span>
       </div>
       <div className="px-[13px] py-[14px]">
-        <div className="whitespace-nowrap text-[13px] font-bold tracking-[0.02em]">
-          {truncateAddress(addr)}
-        </div>
-        <p className="mt-[10px] text-[12px] leading-[1.5] text-dim">
-          No data found for this address. It might be a fresh wallet, an unindexed token, or an
-          unsupported chain.
+        {hasAddr ? (
+          <div className="whitespace-nowrap text-[13px] font-bold tracking-[0.02em]">
+            {truncateAddress(addr)}
+          </div>
+        ) : null}
+        <p className={`text-[12px] leading-[1.5] text-dim${hasAddr ? ' mt-[10px]' : ''}`}>
+          {hasAddr
+            ? 'No data found for this address. It might be a fresh wallet, an unindexed token, or an unsupported chain.'
+            : 'No market data found for this token right now. It might be too new or not yet indexed.'}
         </p>
       </div>
-      <div className="flex border-t-[1.5px] border-line">
-        <a
-          href={explorerAddressUrl(chain, addr)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={BTN}
-        >
-          {explorerName(chain)} <ArrowOut />
-        </a>
-        {/* A fresh token too new even for DexScreener's free index can still surface here. */}
-        <a
-          href={dexScreenerSearchUrl(addr)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={BTN}
-        >
-          DexScreener <ArrowOut />
-        </a>
-      </div>
+      {hasAddr ? (
+        <div className="flex border-t-[1.5px] border-line">
+          <a
+            href={explorerAddressUrl(chain, addr)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={BTN}
+          >
+            {explorerName(chain)} <ArrowOut />
+          </a>
+          {/* A fresh token too new even for DexScreener's free index can still surface here. */}
+          <a
+            href={dexScreenerSearchUrl(addr)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={BTN}
+          >
+            DexScreener <ArrowOut />
+          </a>
+        </div>
+      ) : null}
     </div>
   )
 }

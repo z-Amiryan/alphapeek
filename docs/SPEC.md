@@ -231,7 +231,7 @@ Returns `{ ok: true, version: string }`. No auth, no rate limit.
 
 | Cache layer | Key pattern | TTL | Rationale |
 |---|---|---|---|
-| KV `CACHE` | `kind:{chain}:{addr}` | 30 days | An address doesn't change type |
+| KV `CACHE` | `kind:{chain}:{addr}` | 30 days (positive) / 6 hours (miss) | A real token contract's type is permanent (cache the coinId for a month); a `NOT_A_TOKEN` miss is often just CoinStats indexing lag, so it re-checks within hours and a freshly-indexed token upgrades from the DexScreener fallback to the full CoinStats card |
 | KV `CACHE` | `token:{coinId}` | 60 seconds | Price moves |
 | KV `CACHE` | `chart:{coinId}` | 900 seconds | 7d sparkline is hourly data; cached apart from `token` so a flaky chart call can't pin a blank sparkline, and to cut the ~3-credit chart cost |
 | KV `CACHE` | `wallet:{chain}:{addr}` | 300 seconds | Balances change but slowly |

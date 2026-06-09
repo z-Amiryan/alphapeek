@@ -35,7 +35,14 @@ const NOT_A_TOKEN = 'addr:'
 const NO_SYMBOL_MATCH = '-'
 
 const DAY = 60 * 60 * 24
+// A real token contract's type is permanent → cache a positive coinId for a month. But a
+// MISS is often just CoinStats' few-hour indexing lag (SPEC §9), so the NOT_A_TOKEN
+// sentinel gets a short TTL: a freshly-indexed token then upgrades from the DexScreener
+// fallback to the full CoinStats card (7d chart) within hours, not 30 days. The re-detect
+// cost is negligible — every NOT_A_TOKEN path already does the 40cr wallet call (300s TTL),
+// which dwarfs the 5cr re-detect.
 const KIND_TTL = 30 * DAY
+const NOT_A_TOKEN_TTL = 6 * 60 * 60
 const TOKEN_TTL = 60
 // The 7d sparkline is hourly data, so it can outlive the 60s price refresh; a longer
 // TTL also cuts the ~3-credit chart call. Cached apart from the token so a chart hiccup
@@ -228,14 +235,24 @@ async function buildToken(
   }
 }
 
-// Layered cache per SPEC §4: stable kind lookup gates the expensive wallet call.
+// Layered cache per SPEC §4: stable kind lookup gates the expensive wallet call. This is a
+// hand-rolled read-through (not `cached`) because the TTL depends on the result — a positive
+// coinId is permanent (KIND_TTL), a miss is short-lived (NOT_A_TOKEN_TTL, see above).
 async function resolve(env: Env, addr: string, chain: Chain): Promise<LookupResult> {
-  const kind = await cached(env, `kind:${chain}:${addr}`, KIND_TTL, async () => {
+  const kindKey = `kind:${chain}:${addr}`
+  // JSON-encoded to stay wire-compatible with entries written by `cached()` before this
+  // read-through existed (a plain-string read would mis-parse those across the deploy).
+  const hit = await env.CACHE.get(kindKey, 'json')
+  let kind = typeof hit === 'string' ? hit : null
+  if (kind === null) {
     const coinId = await detectTokenCoinId(env, addr, chain)
-    return coinId ?? NOT_A_TOKEN
-  })
+    kind = coinId ?? NOT_A_TOKEN
+    await env.CACHE.put(kindKey, JSON.stringify(kind), {
+      expirationTtl: coinId ? KIND_TTL : NOT_A_TOKEN_TTL,
+    })
+  }
 
-  if (kind && kind !== NOT_A_TOKEN) {
+  if (kind !== NOT_A_TOKEN) {
     // Safety target is the hovered contract on the inferred chain (no derivation needed).
     const result = await buildToken(env, kind, { chain, contract: addr })
     if (result) return result

@@ -87,7 +87,9 @@ export function App() {
           <header className="flex items-center gap-[9px] border-b-[1.5px] border-line p-[13px]">
             <LogoMark animated />
             <span className="text-[16px] font-bold tracking-[0.02em]">ALPHAPEEK</span>
-            <span className="ml-auto text-[10px] font-bold tracking-[0.08em] text-dim">v0.1</span>
+            <span className="ml-auto text-[10px] font-bold tracking-[0.08em] text-dim">
+              v0.2-beta
+            </span>
           </header>
 
           <section className={SEC}>

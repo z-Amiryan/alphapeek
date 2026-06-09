@@ -4,7 +4,7 @@
 
 ## Project mission (one paragraph)
 
-Build **AlphaPeek v0.1**: a Chrome extension (Manifest V3) that detects EVM wallet addresses on X/Twitter and shows a hoverable info card with wallet balance and top holdings — or token price and 7-day chart if the address is a contract. (30-day PnL is deferred to v0.2 — see `docs/ROADMAP.md`.) Data flows through a Cloudflare Worker proxy that holds the CoinStats API key. The user is **anonymous** (no login). MVP target: **fast, clean, defensive, shippable in ~2 weeks**.
+Build **AlphaPeek v0.1**: a Chrome extension (Manifest V3) that detects EVM wallet addresses on X/Twitter and shows a hoverable info card with wallet balance and top holdings — or token price and 7-day chart if the address is a contract. (The v0.2 cut added a GoPlus contract-safety verdict and all-time wallet PnL — see `docs/ROADMAP.md`.) Data flows through a Cloudflare Worker proxy that holds the CoinStats API key. The user is **anonymous** (no login). MVP target: **fast, clean, defensive, shippable in ~2 weeks**.
 
 ## Documents in this repo (read in order)
 
@@ -31,7 +31,7 @@ Build **AlphaPeek v0.1**: a Chrome extension (Manifest V3) that detects EVM wall
 - Use **conventional commits** (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`)
 - Branch per feature: `feat/<slug>`, `fix/<slug>`
 - Reference the spec file + section in commit bodies when relevant
-- Comment only to explain a *why* — a non-obvious decision, tradeoff, or gotcha. Don't add comments that restate *what* the code already says; rename or restructure instead.
+- **Minimise comments — default to none.** Comment only to explain a *why* — a non-obvious decision, tradeoff, or gotcha. Don't restate *what* the code says (rename/restructure instead), and put longer rationale in docs, not inline.
 - Re-read the relevant spec section before starting a new task
 
 ### Never do:

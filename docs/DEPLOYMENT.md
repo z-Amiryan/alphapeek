@@ -71,6 +71,11 @@ pnpm --filter @alphapeek/worker run deploy
 # Outputs: https://alphapeek-proxy.<account>.workers.dev
 ```
 
+> **This is the recommended / primary deploy path** (the CI workflow in §8 is an
+> optional, manually-triggered alternative). It keeps your Cloudflare token on your
+> machine, never in the repo. Bump `WORKER_VERSION` (`apps/worker/src/env.ts`, §7)
+> before deploying so `GET /health` confirms the new build is actually live.
+
 After production deploy:
 - [ ] Record the Worker URL in `apps/extension/.env` as `VITE_WORKER_URL=...`
 - [ ] Update `wxt.config.ts` CSP `connect-src` to allowlist the Worker domain
@@ -89,7 +94,7 @@ Required by Chrome Web Store for any extension that accesses user data (which we
 - [ ] What data we collect: addresses the user hovers (sent to our Worker)
 - [ ] What data we DON'T collect: no PII, no wallet contents, no tracking
 - [ ] How long we retain it: per-IP rate-limit counters expire in ~70s; the global daily-cap counter expires in ~36h. No logs of queried addresses.
-- [ ] Third parties: CoinStats receives the address as part of API queries
+- [ ] Third parties: CoinStats receives the address as part of API queries; for token contracts, GoPlus also receives the contract address for the safety scan (v0.2) — both via the Worker, keep in sync with `privacy.md`/`privacy.html`
 - [ ] User's rights: nothing to delete (we don't keep anything tied to identity)
 - [ ] Contact: GitHub Issues
 
@@ -107,7 +112,7 @@ Required:
 - [ ] **Privacy policy URL:** GitHub Pages URL from step 3
 - [ ] **Single purpose statement:** "AlphaPeek shows wallet and token info when you hover an address on X/Twitter."
 
-> **SEO note:** Chrome Web Store search ranking lives in the **listing copy**, not in the code. The discoverability levers are the **detailed description** (work in keywords naturally: wallet, token, EVM, X/Twitter, balances, holdings, price, hover) and the **5 keyword/tag fields** in the dashboard. The manifest `description` only seeds the short description; update the listing copy to actually move SEO.
+> **SEO note:** Chrome Web Store search ranking lives in the **listing copy**, not in the code. The only discoverability lever is the **detailed description** — work keywords in *naturally* (wallet, token, EVM, X/Twitter, balances, holdings, price, hover). There is **no** keyword/tag field, and a standalone keyword list in the description is rejected as spam ([keyword stuffing](https://developer.chrome.com/docs/webstore/troubleshooting/#keyword-stuffing)). The manifest `description` only seeds the short description; update the listing copy to actually move SEO.
 
 ### 🚨 ASK USER: Permission justification
 
@@ -201,22 +206,25 @@ jobs:
           if-no-files-found: error
 ```
 
-### `deploy-worker.yml` (runs on push to main, **gated by approval**)
+### `deploy-worker.yml` (manual trigger, **gated by approval**)
 
-The deploy job is routed through the `production` GitHub Environment, so it
-**pauses for required-reviewer approval** before every production deploy — this
-keeps the "ask before deploying to Cloudflare production" rule (§2) true even
-though it triggers on merge.
+**The primary deploy path is the manual `wrangler deploy` in §2** — best for a
+solo, open-source beta because it keeps your Cloudflare credentials on your machine
+and out of the public repo entirely. This workflow is the **optional** gated/audited
+alternative: it runs **only** when you trigger it from the Actions tab
+("Run workflow" → `workflow_dispatch`), and the `production` GitHub Environment
+still **pauses for required-reviewer approval**.
+
+> It previously triggered on push to `main`, but that **failed on every merge**
+> (no `CLOUDFLARE_API_TOKEN` set) while the green `ci.yml` check made it *look* like
+> a successful deploy — a real footgun (it shipped nothing). Manual trigger removes
+> that. Only adopt the auto-deploy-on-merge form once you accept a scoped token
+> living in the repo and want "merge = released".
 
 ```yaml
 name: Deploy Worker
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/worker/**'
-      - 'packages/shared/**'
-      - '.github/workflows/deploy-worker.yml'
+  workflow_dispatch:             # manual "Run workflow" only
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -237,9 +245,10 @@ jobs:
           # CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 ```
 
-🚨 **ASK USER** to configure these GitHub repo settings before the deploy can succeed:
+The manual deploy (§2) needs **none** of the GitHub settings below. Configure them
+**only if** you opt into this workflow:
 1. **Create the `production` Environment** (Settings → Environments) and add the maintainer as a **Required reviewer** — this is what makes the gate pause.
-2. **Add the `CLOUDFLARE_API_TOKEN` secret**, scoped to the `production` environment — create the token at https://dash.cloudflare.com/profile/api-tokens with the "Edit Cloudflare Workers" template.
+2. **Add the `CLOUDFLARE_API_TOKEN` secret**, scoped to the `production` environment — create the token at https://dash.cloudflare.com/profile/api-tokens with the "Edit Cloudflare Workers" template (minimal scope: `Workers Scripts: Edit` + `Workers KV Storage: Edit` on the one account).
 3. The Worker also needs its **KV namespace IDs** filled into `wrangler.toml` (§2) and the **first deploy done manually** (§2) — a non-interactive `wrangler deploy` fails until both are true, regardless of the token.
 4. `COINSTATS_API_KEY` is set via `wrangler secret put` (§2), **NOT** as a GitHub secret. Never put it in repo or CI logs.
 

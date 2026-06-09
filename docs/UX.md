@@ -87,28 +87,32 @@ A blinking caret (`ap-blink`, gated behind `motion-safe`), centered — no spinn
 
 ```
 ┌────────────────────────────────────┐
-│ [🪙] PEPE                $0.000002 │ ← row 1: icon + symbol + price
-│      Pepe Coin            ↑ 12.4% │ ← row 2: name + 24h change (colored)
+│ ▣ FLOKI / USD                LIVE  │ ← header: accent square + SYMBOL / USD + LIVE tag
 │ ────────────────────────────────── │
-│ ⚠ Low liquidity  ⚠ High volatility │ ← flag badges (only if present)
+│ Contract  [CAUTION]    1 issue  ⓘ │ ← contract-safety verdict (only if scan present)
 │ ────────────────────────────────── │
-│ Mcap   $2.1B                       │ ← stats grid
-│ Vol    $480M                       │
+│ $2.4e-5                     +0.5% │ ← hero price (left) + 24h change pill (colored)
+│ ╱╲╱──╲╱─                          │ ← 7d sparkline (44px, full width; lime up / red down)
+│ ⚠ Low liquidity  ⚠ High volatility │ ← market-data flag badges (only if present)
 │ ────────────────────────────────── │
-│ ╱╲╱╲___╱╲╱─                       │ ← 7d sparkline (60px tall, full width)
+│ Mcap  $235.8M  │  Vol 24h  $21.4M │ ← split stats grid
 │ ────────────────────────────────── │
-│ [↗ CoinStats]  [↗ DEXScreener]    │ ← footer actions
+│ Buy tax 0.3%    Sell tax 0.3%     │ ← contract-safety breakdown (only if data)
+│ [⚠ Owner privileges]   Mintable   │ ←  risk chips (amber) + note chips (neutral)
+│ ────────────────────────────────── │
+│ [↗ CoinStats]      [↗ DEX]        │ ← footer actions
 └────────────────────────────────────┘
 ```
 
-- **Token icon:** 32px circle, fallback to gray circle with first letter of symbol if `imgUrl` fails
-- **Price:** right-aligned, large (`text-xl`), bold
-- **24h change:** colored with `up` (accent-lime) / `down` (red) — note up is lime, not green (brand)
+- **Header:** an accent-lime square + `{SYMBOL} / USD`, with a `LIVE` tag on the right. No token icon or coin-name row — the symbol carries the identity.
+- **Price:** hero size (`text-[28px]`), left-aligned; **24h change** is a filled pill on the right, colored `up` (accent-lime) / `down` (red) — note up is lime, not green (brand).
+- **Contract-safety verdict (`TokenSummary.safety`, v0.2 — `SafetyBadge`):** the first thing under the header. Maps `safe` → **Safe** (lime fill), `caution` → **Caution** (amber outline), `danger` → **Risk** (red fill), `unknown` → **Unverified** (grey hairline), mirroring the change-pill convention so it reads as status. The right side shows the verdict-driving issue count (or "No critical risks" when safe). A small square **ⓘ marker** reveals the GoPlus attribution + "not financial advice" disclaimer on hover/focus — a pure-CSS tooltip (no JS): the card only dismisses on mouse-leave of the *whole* card, so hovering the marker inside it keeps it open. It's anchored here, not in the breakdown, because the verdict row always renders when `safety` exists while the breakdown drops out for a clean token. Render nothing when `safety` is absent (best-effort scan).
+- **Contract-safety breakdown (`SafetyDetails`, v0.2):** buy/sell tax, then severity-ranked **risk chips** (amber, worst-first, capped at 3 with a `+N more` tail) and **informational note chips** (neutral grey — `mintable` / `proxy` / `blacklist`, which fire on legit tokens like CAKE/AAVE, so they never raise the verdict). No disclaimer line here — it lives in the verdict row's ⓘ marker. Renders only when there's tax, a risk, or a note.
 - **Flag badges (`TokenSummary.flags`):** soft amber pills for `low_liquidity` (24h vol < $50k) and
-  `high_volatility` (|24h| ≥ 25%) — derived from market data only. **NOT a safety verdict** — true
-  token-risk (honeypot/ownership) is deferred to v0.2. Render nothing when `flags` is empty.
-- **Sparkline:** SVG, **accent-lime** (`acc`) stroke 2px, no fill, no axes, no labels. Just the shape. Min/max from data, no padding. Icons throughout the card are hand-rolled inline SVG (`components/icons.tsx`), not an icon font.
-- **Footer links:** open in new tab. Use `target="_blank"` + `rel="noopener noreferrer"`.
+  `high_volatility` (|24h| ≥ 25%) — derived from **market data only**, distinct from the contract-safety
+  verdict above. Render nothing when `flags` is empty.
+- **Sparkline:** SVG, 2px stroke, no fill / axes / labels — just the shape, min/max from data. Accent-lime when 24h is up, red when down. Icons throughout are hand-rolled inline SVG (`components/icons.tsx`), not an icon font.
+- **Footer links:** `CoinStats` + `DEX`, open in new tab (`target="_blank"` + `rel="noopener noreferrer"`).
 
 ### C. Wallet card
 
@@ -119,6 +123,7 @@ A blinking caret (`ap-blink`, gated behind `motion-safe`), centered — no spinn
 │ ────────────────────────────────── │
 │ Total Balance        Stablecoins 18%│ ← label + stablecoin % (right)
 │ $48,237,512                        │ ← big number (text-xl)
+│ PnL · All-time      +$1.2M · +24.6%│ ← v0.2: all-time PnL (colored), only if present
 │ ▰▰▰▰▰▰▰▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱▱           │ ← allocation bar (top holdings, value-neutral hues)
 │ ────────────────────────────────── │
 │ Top Holdings                       │ ← section label
@@ -141,8 +146,11 @@ A blinking caret (`ap-blink`, gated behind `motion-safe`), centered — no spinn
   `pct`); the uncovered remainder of the track reads as "other". Purely visual — no green/red.
 - **Holdings rows:** symbol + percentage + USD (no token icon in v0.1). Row hover → slight `bg` highlight. Each row **deep-links to `coinstats.app/coins/{coinId}`** (new tab) when the holding has a CoinStats id, with a hover-revealed ↗; rows without an id stay non-clickable.
 - **Total balance:** `Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })`
+- **PnL (`WalletSummary.pnl`, v0.2):** a single `PnL · All-time` line directly under the balance,
+  colored `up`/`down`. CoinStats exposes fixed profit buckets with **no 30-day window**, so the
+  surfaced figure is **all-time** profit — the strongest "ever been profitable" read.
 
-Note: v0.1 wallet card **does not show PnL** because the PnL endpoint costs additional credits per call and we want to keep wallet lookups at 40 credits, not 80+. Add PnL in v0.2 with a deliberate UX decision (e.g., fetch on click-to-expand only).
+Note: PnL costs an extra 25 credits, so it's fetched **only once an address is a confirmed wallet** (never on token/unknown fallthroughs) and is **best-effort** — a PnL failure doesn't fail the card. Total wallet lookups stay at 40 credits; the +25 only applies to confirmed wallets.
 
 ### D. Unknown state
 

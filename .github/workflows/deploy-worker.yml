@@ -1,19 +1,16 @@
 name: Deploy Worker
 
+# Manual trigger only — optional gated alternative to the primary manual
+# `wrangler deploy`. Why not auto-deploy on merge: DEPLOYMENT.md §8.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/worker/**'
-      - 'packages/shared/**'
-      - '.github/workflows/deploy-worker.yml'
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     # Routes the prod deploy through the `production` GitHub Environment so it
     # pauses for required-reviewer approval — keeps "ask before deploying to
-    # Cloudflare production" (CLAUDE.md / DEPLOYMENT.md §2) true even on merge.
+    # Cloudflare production" (CLAUDE.md / DEPLOYMENT.md §2) true.
     environment: production
     # Never run two prod deploys at once; let an in-flight one finish.
     concurrency:

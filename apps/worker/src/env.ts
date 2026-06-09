@@ -10,5 +10,5 @@ export type Env = {
   COINSTATS_API_KEY: string
 }
 
-// Surfaced at /health; bump on each deploy.
-export const WORKER_VERSION = 'v2026.06.03'
+// Surfaced at /health; bump on each deploy (DEPLOYMENT.md §7). v2026.06.08 = v0.2.
+export const WORKER_VERSION = 'v2026.06.08'

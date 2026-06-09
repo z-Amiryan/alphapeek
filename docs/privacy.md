@@ -1,6 +1,6 @@
 # Privacy Policy — AlphaPeek
 
-_Last updated: June 3, 2026._
+_Last updated: June 9, 2026._
 
 AlphaPeek is an open-source Chrome extension that shows information about EVM wallet addresses and token contracts when you hover them on supported websites. This document explains what data the extension touches and what it doesn't.
 
@@ -29,7 +29,7 @@ The proxy does **not** log:
 
 ## Third parties
 
-When AlphaPeek looks up an address, it sends that address to the [CoinStats Public API](https://coinstats.app/api-docs/) via the proxy. CoinStats's own privacy policy applies to that interaction. Your browser does not contact CoinStats directly.
+When AlphaPeek looks up an address, the proxy sends that address to the [CoinStats Public API](https://coinstats.app/api-docs/) to fetch token or wallet data. For **token contracts**, the proxy also sends the contract address to the [GoPlus Token Security API](https://gopluslabs.io/) for a free, keyless contract-safety scan. Each provider's own privacy policy applies to that interaction. Your browser never contacts CoinStats or GoPlus directly — all requests go through the proxy.
 
 ## Local storage on your device
 

@@ -20,9 +20,11 @@ import { fetchTokenSafety } from './goplus'
 import { withinDailyCap, withinIpLimit } from './ratelimit'
 
 const ADDRESS_RE = /^0x[a-f0-9]{40}$/
-// CoinStats coin-id slug (e.g. `pepe`, `pancakeswap-token`). Conservative — the ticker
-// path only ever sends ids from our own top-1000 whitelist, but validate defensively.
-const COIN_ID_RE = /^[a-z0-9][a-z0-9._-]{0,80}$/
+// CoinStats coin-id (e.g. `pepe`, `pancakeswap-token`, or a case-sensitive
+// `<base58>_solana` for non-EVM coins). The ticker path only sends ids from our top-1000
+// whitelist, but validate defensively. Case is preserved — CoinStats ids are
+// case-sensitive (lowercasing a Solana base58 id 404s it).
+const COIN_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/
 // A bare cashtag SYMBOL (uppercased), letter-led. The extension only sends long-tail
 // (non-whitelisted) symbols here; validate defensively against the resolution endpoint.
 const SYMBOL_RE = /^[A-Z][A-Z0-9]{1,10}$/
@@ -149,7 +151,7 @@ app.get('/v1/lookup', async (c) => {
 // top-1000 whitelist and looks it up here. The safety chain is derived from the coin's
 // contractAddresses (pickSafetyTarget), so no chain param is needed.
 app.get('/v1/coin', async (c) => {
-  const coinId = (c.req.query('coinId') ?? '').toLowerCase()
+  const coinId = c.req.query('coinId') ?? ''
   if (!COIN_ID_RE.test(coinId)) {
     return c.json<LookupError>({ error: 'invalid_address' }, 400)
   }

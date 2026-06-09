@@ -107,7 +107,7 @@ export function TokenView({ token, chain, addr }: Props) {
           // No CoinStats coin page for an unindexed token — link straight to the DexScreener
           // pair (its authoritative chain), falling back to a chain+addr URL if absent.
           <a
-            href={token.url ?? dexScreenerUrl(chain, addr)}
+            href={token.url || dexScreenerUrl(chain, addr)}
             target="_blank"
             rel="noopener noreferrer"
             className={BTN}

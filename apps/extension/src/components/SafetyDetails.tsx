@@ -1,6 +1,7 @@
 // Contract-safety breakdown for the token card: buy/sell tax + the severity-ranked
 // findings (worst first, capped to keep the hover card compact). Pairs with
-// SafetyBadge (the at-a-glance verdict). Third-party data — disclaimer is required.
+// SafetyBadge, which owns the verdict header plus the GoPlus attribution + disclaimer
+// (its "i" marker) — so this section stays pure data, no second "Contract" label.
 import type { SafetyFlag, TokenSafety } from '@alphapeek/shared'
 
 const FLAG_LABELS: Record<SafetyFlag, string> = {
@@ -33,11 +34,9 @@ export function SafetyDetails({ safety }: { safety: TokenSafety }) {
   const extra = flags.length - shown.length
 
   return (
-    <div className="border-t-[1.5px] border-line px-[13px] py-[10px]">
-      <div className="text-[9px] uppercase tracking-[0.12em] text-dim">Contract Safety</div>
-
+    <div className="flex flex-col gap-2 border-t-[1.5px] border-line px-[13px] py-[10px]">
       {hasTax ? (
-        <div className="mt-2 flex gap-5 text-[11px]">
+        <div className="flex gap-5 text-[11px]">
           <span className="text-dim">
             Buy tax <span className="font-bold tabular-nums text-fg">{formatTax(buyTaxPct)}</span>
           </span>
@@ -48,7 +47,7 @@ export function SafetyDetails({ safety }: { safety: TokenSafety }) {
       ) : null}
 
       {shown.length > 0 || notes.length > 0 ? (
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           {/* Verdict-driving risks: amber warning chips. */}
           {shown.map((f) => (
             <span
@@ -74,10 +73,6 @@ export function SafetyDetails({ safety }: { safety: TokenSafety }) {
           ))}
         </div>
       ) : null}
-
-      <div className="mt-2 text-[9px] tracking-[0.04em] text-dim">
-        Security data by GoPlus · not financial advice
-      </div>
     </div>
   )
 }

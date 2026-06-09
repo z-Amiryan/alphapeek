@@ -22,8 +22,8 @@
 
 ## Features
 
-- **Hover a wallet** → total USD balance, top 5 holdings, an allocation bar, and a **stablecoin %** ("risk-on vs parked") signal.
-- **Hover a token contract** → symbol, price, 24h change, market cap, 24h volume, a **7-day sparkline**, and soft market-data flags (`low-liquidity` / `high-volatility` — hints, **not** a safety verdict).
+- **Hover a wallet** → total USD balance, top 5 holdings, an allocation bar, a **stablecoin %** ("risk-on vs parked") signal, and **all-time PnL**.
+- **Hover a token contract** → symbol, price, 24h change, market cap, 24h volume, a **7-day sparkline**, a free **contract-safety verdict** (GoPlus: safe / caution / risk, plus buy/sell tax and risk findings), and soft market-data flags (`low-liquidity` / `high-volatility`).
 - **Click any holding** → opens its CoinStats coin page (`coinstats.app/coins/{coin}`).
 - **Toolbar popup** → live **Fear & Greed** index, a manual address lookup, your recent lookups, and a default-chain setting.
 - **7 EVM chains:** Ethereum, BNB Chain, Polygon, Base, Arbitrum, Optimism, Avalanche. Chain is inferred from surrounding tweet text, falling back to your default.
@@ -115,11 +115,11 @@ curl "http://localhost:8787/v1/lookup?chain=ethereum&addr=0x95ad61b0a150d79219dc
 
 ## Status & limitations
 
-v0.1, pre-release. Deliberately scoped (full list in [`docs/ROADMAP.md`](docs/ROADMAP.md)):
+Pre-release: the v0.1 core plus the v0.2 safety/PnL cut. Deliberately scoped (full list in [`docs/ROADMAP.md`](docs/ROADMAP.md)):
 
 - **EVM only**, **X / Twitter only** — more chains and sites in v0.2+.
 - **Trending/established-token inspector, not a launch-sniper.** CoinStats Public API indexes new tokens within a few hours, so a minutes-old contract resolves as `unknown` by design.
-- **No token-risk scoring, `$TICKER` detection, PnL, or watchlist yet** — see the roadmap.
+- **Contract-safety scoring (GoPlus) and all-time wallet PnL shipped in v0.2;** `$TICKER` detection and a persistent watchlist are still ahead — see the roadmap.
 - Chain inference from tweet text is best-effort (X has no URL context).
 
 ## For humans

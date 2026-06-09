@@ -153,6 +153,7 @@ type TokenSummary = {
   volume: number
   sparkline: number[]  // 7d, ~168 points
   flags: TokenFlag[]   // 'low_liquidity' | 'high_volatility' — market-data hints, not a safety verdict
+  safety?: TokenSafety // v0.2: GoPlus contract-safety scan (shape in §6); best-effort, absent if unavailable
 }
 
 type WalletSummary = {
@@ -168,6 +169,7 @@ type WalletSummary = {
     pct: number  // 0-100
   }>
   stablecoinPct: number  // 0-100, computed over the FULL holdings before the top-N slice
+  pnl?: WalletPnl        // v0.2: all-time PnL from /wallet/pl (shape in §6); best-effort
 }
 ```
 
@@ -432,6 +434,24 @@ export type Chain =
 
 export type TokenFlag = 'low_liquidity' | 'high_volatility'
 
+// v0.2 — third-party (GoPlus) contract-safety scan. Distinct from TokenFlag
+// (our own market-data heuristic): reflects on-chain contract properties.
+export type SafetyVerdict = 'safe' | 'caution' | 'danger' | 'unknown'
+
+export type SafetyFlag =
+  | 'honeypot' | 'cant_sell_all' | 'high_buy_tax' | 'high_sell_tax'
+  | 'mintable' | 'owner_privileges' | 'proxy' | 'unverified_source'
+  | 'blacklist' | 'transfer_pausable'
+
+export type TokenSafety = {
+  verdict: SafetyVerdict
+  buyTaxPct: number | null
+  sellTaxPct: number | null
+  flags: SafetyFlag[]  // verdict-driving risks, severity-ranked (worst first)
+  notes: SafetyFlag[]  // informational (mintable/proxy/blacklist) — never raise the verdict
+  source: 'goplus'
+}
+
 export type TokenSummary = {
   coinId: string
   name: string
@@ -442,7 +462,16 @@ export type TokenSummary = {
   marketCap: number
   volume: number
   sparkline: number[]
-  flags: TokenFlag[]  // market-data hints only — NOT a safety verdict
+  flags: TokenFlag[]    // market-data hints only — NOT a safety verdict
+  safety?: TokenSafety  // v0.2: best-effort; absent when the scan is unavailable
+}
+
+// v0.2 — wallet performance. CoinStats exposes fixed buckets (no 30-day window),
+// so the surfaced window is all-time.
+export type WalletPnl = {
+  window: 'all_time'
+  absUsd: number  // may be negative
+  pct: number     // may be negative
 }
 
 export type WalletSummary = {
@@ -458,6 +487,7 @@ export type WalletSummary = {
     pct: number
   }>
   stablecoinPct: number  // 0-100, over the FULL holdings before the slice
+  pnl?: WalletPnl        // v0.2: all-time PnL; best-effort
 }
 
 export type LookupResult =
@@ -491,8 +521,8 @@ If a budget is exceeded after honest effort, document the gap in the PR and deci
 
 | # | Scenario | Expected |
 |---|---|---|
-| 1 | Hover SHIB contract on a tweet | Token card with SHIB data (USDT/USDC are not in CoinStats' contract index — see §4) |
-| 2 | Hover Vitalik's address on a tweet | Wallet card with total balance + top holdings (no PnL in v0.1 — ROADMAP) |
+| 1 | Hover SHIB contract on a tweet | Token card with SHIB data (USDT/USDC are not in CoinStats' contract index — see §4) + GoPlus safety verdict with hover-`ⓘ` attribution/disclaimer (v0.2; absent if scan unavailable) |
+| 2 | Hover Vitalik's address on a tweet | Wallet card with total balance + top holdings + all-time PnL line (v0.2; absent if unavailable) |
 | 3 | Hover a random unknown address | "Unknown address" state |
 | 4 | Hover same address twice in 1 min | Second hover served from cache, < 50ms |
 | 5 | Hover, then quickly mouseout before 200ms | No card appears (debounce works) |

@@ -94,7 +94,7 @@ Required by Chrome Web Store for any extension that accesses user data (which we
 - [ ] What data we collect: addresses the user hovers (sent to our Worker)
 - [ ] What data we DON'T collect: no PII, no wallet contents, no tracking
 - [ ] How long we retain it: per-IP rate-limit counters expire in ~70s; the global daily-cap counter expires in ~36h. No logs of queried addresses.
-- [ ] Third parties: CoinStats receives the address as part of API queries
+- [ ] Third parties: CoinStats receives the address as part of API queries; for token contracts, GoPlus also receives the contract address for the safety scan (v0.2) — both via the Worker, keep in sync with `privacy.md`/`privacy.html`
 - [ ] User's rights: nothing to delete (we don't keep anything tied to identity)
 - [ ] Contact: GitHub Issues
 

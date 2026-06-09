@@ -138,8 +138,8 @@ export type WalletSummary = {
    */
   stablecoinPct: number
   /**
-   * 30-day PnL. Optional/best-effort: absent when CoinStats doesn't return it for
-   * the address — the card renders fully without it.
+   * All-time PnL (see WalletPnl — CoinStats has no 30-day bucket). Optional/best-effort:
+   * absent when CoinStats doesn't return it for the address — the card renders fully without it.
    */
   pnl?: WalletPnl
 }

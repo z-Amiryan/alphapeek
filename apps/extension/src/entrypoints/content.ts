@@ -7,9 +7,9 @@ import { type Chain, isChain } from '@alphapeek/shared'
 import { browser } from 'wxt/browser'
 import { inferChainForAddress } from '@/lib/chain'
 import { debugError } from '@/lib/debug'
-import { findAddress } from '@/lib/regex'
+import { findAddress, findTicker } from '@/lib/regex'
 import { DEFAULT_CHAIN_KEY, getDefaultChain } from '@/services/settings'
-import { type CardHandle, mountCard } from '@/shadow/mount'
+import { type CardHandle, type Target, mountCard } from '@/shadow/mount'
 import '@/shadow/styles.css'
 
 const HOVER_DELAY = 200
@@ -21,6 +21,11 @@ const STYLE_ID = 'alphapeek-underline-style'
 // from the detected X theme (light vs dim/lights-out) instead of reading --ap-acc.
 const UNDERLINE_VAR = '--alphapeek-acc'
 const ACCENT_BY_THEME = { light: '#aad400', dark: '#c6f432' } as const
+
+// Stable identity for a hover target (dedup "already showing this" + post-async checks).
+function targetKey(target: Target): string {
+  return target.kind === 'address' ? `a:${target.addr}` : `c:${target.coinId}`
+}
 
 export default defineContentScript({
   matches: ['https://x.com/*', 'https://twitter.com/*'],
@@ -38,11 +43,11 @@ export default defineContentScript({
     })
 
     let activeAnchor: HTMLElement | null = null
-    let pendingAddr: string | null = null
+    let pendingTarget: Target | null = null
     let hoverTimer: ReturnType<typeof setTimeout> | undefined
     let dismissTimer: ReturnType<typeof setTimeout> | undefined
     let card: CardHandle | null = null
-    let cardAddr: string | null = null
+    let cardKey: string | null = null
     let pointerOnCard = false
     // Live cursor position, used to sanity-check dismissals against real geometry.
     let lastX = 0
@@ -59,14 +64,14 @@ export default defineContentScript({
         card.remove()
         card = null
       }
-      cardAddr = null
+      cardKey = null
       pointerOnCard = false
       if (activeAnchor) {
         activeAnchor.classList.remove(UNDERLINE_CLASS)
         activeAnchor.removeEventListener('mouseleave', onAnchorLeave)
         activeAnchor = null
       }
-      pendingAddr = null
+      pendingTarget = null
     }
 
     // A fixed, top-layer card overlapping the anchor (plus the shadow-root boundary) makes the
@@ -99,23 +104,23 @@ export default defineContentScript({
       scheduleDismiss()
     }
 
-    async function showCard(anchor: HTMLElement, addr: string, chain: Chain): Promise<void> {
+    async function showCard(anchor: HTMLElement, target: Target): Promise<void> {
       hoverTimer = undefined
+      const key = targetKey(target)
       // Bail if the target changed while the timer was pending.
-      if (activeAnchor !== anchor || pendingAddr !== addr) return
+      if (activeAnchor !== anchor || !pendingTarget || targetKey(pendingTarget) !== key) return
 
-      // Replacing a card on the same anchor (e.g. a second address in one
-      // element): tear the old one down so it can't dangle.
+      // Replacing a card on the same anchor (e.g. a second match in one element):
+      // tear the old one down so it can't dangle.
       if (card) {
         card.remove()
         card = null
-        cardAddr = null
+        cardKey = null
       }
 
       try {
         const handle = await mountCard(ctx, {
-          addr,
-          chain,
+          target,
           anchor,
           theme: detectTheme(),
           onClose: reset,
@@ -129,18 +134,18 @@ export default defineContentScript({
           },
         })
         // Target may have changed during the async mount; discard if so.
-        if (activeAnchor !== anchor || pendingAddr !== addr) {
+        if (activeAnchor !== anchor || !pendingTarget || targetKey(pendingTarget) !== key) {
           handle.remove()
           return
         }
         card = handle
-        cardAddr = addr
+        cardKey = key
       } catch (err) {
         debugError('mountCard failed', err)
       }
     }
 
-    function scheduleShow(anchor: HTMLElement, addr: string, context: string): void {
+    function scheduleShow(anchor: HTMLElement, target: Target): void {
       clearTimeout(hoverTimer)
       clearTimeout(dismissTimer)
 
@@ -151,12 +156,27 @@ export default defineContentScript({
         anchor.classList.add(UNDERLINE_CLASS)
         anchor.addEventListener('mouseleave', onAnchorLeave)
       }
-      pendingAddr = addr
+      pendingTarget = target
 
-      const chain = inferChainForAddress(context, addr, defaultChain)
       hoverTimer = setTimeout(() => {
-        void showCard(anchor, addr, chain)
+        void showCard(anchor, target)
       }, HOVER_DELAY)
+    }
+
+    // An EVM address (chain inferred from nearby text) or a whitelisted $CASHTAG. The
+    // 0x branch wins if both somehow appear — an address is the higher-signal match.
+    function detectTarget(text: string): Target | null {
+      if (text.includes('0x')) {
+        const addr = findAddress(text)
+        if (addr) {
+          return { kind: 'address', addr, chain: inferChainForAddress(text, addr, defaultChain) }
+        }
+      }
+      if (text.includes('$')) {
+        const hit = findTicker(text)
+        if (hit) return { kind: 'coin', coinId: hit.coinId, symbol: hit.symbol }
+      }
+      return null
     }
 
     function onMouseMove(e: MouseEvent): void {
@@ -170,15 +190,14 @@ export default defineContentScript({
       if (pointerOnCard) return
       const node = textNodeAt(e.clientX, e.clientY)
       const text = node?.textContent
-      // Quick reject before running the regex.
-      if (!text || !text.includes('0x')) return
-      const addr = findAddress(text)
-      if (!addr) return
+      if (!text) return
+      const target = detectTarget(text)
+      if (!target) return
       const anchor = node?.parentElement
       if (!anchor) return
       // Already showing this exact target → nothing to do.
-      if (card && cardAddr === addr && activeAnchor === anchor) return
-      scheduleShow(anchor, addr, text)
+      if (card && cardKey === targetKey(target) && activeAnchor === anchor) return
+      scheduleShow(anchor, target)
     }
 
     document.body.addEventListener('mouseover', onMouseOver)

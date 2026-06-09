@@ -36,8 +36,7 @@ export function TokenView({ token, chain, addr }: Props) {
         </span>
         {token.source === 'dexscreener' ? (
           <InfoTooltip label="Data source">
-            Live DEX market data via DexScreener. Not
-            financial advice.
+            Live DEX market data via DexScreener. Not financial advice.
           </InfoTooltip>
         ) : null}
         <span className="ml-auto shrink-0 bg-acc px-1.5 py-0.5 text-[9px] font-bold tracking-[0.14em] text-acc-ink">
@@ -125,14 +124,17 @@ export function TokenView({ token, chain, addr }: Props) {
             >
               CoinStats <ArrowOut />
             </a>
-            <a
-              href={dexScreenerUrl(chain, addr)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={BTN}
-            >
-              DEX <ArrowOut />
-            </a>
+            {/* $TICKER cards have no hovered contract — show CoinStats only. */}
+            {addr ? (
+              <a
+                href={dexScreenerUrl(chain, addr)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={BTN}
+              >
+                DEX <ArrowOut />
+              </a>
+            ) : null}
           </>
         )}
       </div>

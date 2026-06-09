@@ -1,16 +1,16 @@
 // Owns the lookup lifecycle and positions the card against the hovered address
 // via Floating UI. Pointer-enter/leave bubble to the content script so it can run
 // the grace period that lets the user move from the address onto the card (UX §1).
-import type { Chain } from '@alphapeek/shared'
+import { DEFAULT_CHAIN } from '@alphapeek/shared'
 import { autoUpdate, flip, offset, shift, useFloating } from '@floating-ui/react'
 import { useEffect, useId, useState } from 'react'
-import { requestLookup } from '@/services/messaging'
+import { requestCoinLookup, requestLookup } from '@/services/messaging'
+import type { Target } from '@/shadow/mount'
 import { type LookupState, ResultView } from './ResultView'
 import { CARD } from './ui'
 
 type Props = {
-  addr: string
-  chain: Chain
+  target: Target
   anchor: HTMLElement
   theme: 'light' | 'dark'
   onClose: () => void
@@ -22,8 +22,7 @@ type Props = {
 const TOP_LAYER = 2147483647
 
 export function HoverCard({
-  addr,
-  chain,
+  target,
   anchor,
   theme,
   onClose,
@@ -33,6 +32,10 @@ export function HoverCard({
   const [state, setState] = useState<LookupState>({ status: 'loading' })
   const [attempt, setAttempt] = useState(0)
   const cardId = useId()
+  // ResultView/TokenView take addr+chain for the address card's explorer links; a coin
+  // card has neither, so pass empty/default — TokenView drops the DEX link when addr is ''.
+  const addr = target.kind === 'address' ? target.addr : ''
+  const chain = target.kind === 'address' ? target.chain : DEFAULT_CHAIN
 
   const { refs, floatingStyles, isPositioned } = useFloating({
     placement: 'top',
@@ -47,7 +50,11 @@ export function HoverCard({
   useEffect(() => {
     let active = true
     setState({ status: 'loading' })
-    requestLookup(addr, chain).then((res) => {
+    const lookup =
+      target.kind === 'address'
+        ? requestLookup(target.addr, target.chain)
+        : requestCoinLookup(target.coinId)
+    lookup.then((res) => {
       if (!active) return
       setState(
         res.ok ? { status: 'ready', result: res.data } : { status: 'error', code: res.error },
@@ -56,7 +63,7 @@ export function HoverCard({
     return () => {
       active = false
     }
-  }, [addr, chain, attempt])
+  }, [target, attempt])
 
   // Associate the anchor with the card for assistive tech (UX §6).
   useEffect(() => {

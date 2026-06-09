@@ -7,7 +7,14 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "ignore": ["**/.output/**", "**/.wxt/**", "**/dist/**", "**/node_modules/**", "**/*.md"]
+    "ignore": [
+      "**/.output/**",
+      "**/.wxt/**",
+      "**/dist/**",
+      "**/node_modules/**",
+      "**/*.md",
+      "**/*.generated.ts"
+    ]
   },
   "formatter": {
     "enabled": true,

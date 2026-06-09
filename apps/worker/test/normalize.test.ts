@@ -5,6 +5,7 @@ import {
   normalizeToken,
   normalizeWallet,
   normalizeWalletPnl,
+  pickSafetyTarget,
 } from '../src/coinstats'
 import { normalizeDexToken } from '../src/dexscreener'
 import { normalizeSafety } from '../src/goplus'
@@ -240,6 +241,69 @@ describe('normalizeFearGreed', () => {
 describe('normalizeToken source', () => {
   it('stamps source=coinstats on the CoinStats path', () => {
     expect(normalizeToken('pepe', { symbol: 'pepe' }, []).source).toBe('coinstats')
+  })
+})
+
+describe('pickSafetyTarget', () => {
+  // contractAddresses[].blockchain uses the /coins slug namespace (binance_smart, etc.).
+  it('prefers the canonical singular contractAddress deployment (CAKE = BSC-native)', () => {
+    const cake = {
+      contractAddress: '0x0E09FABB73BD3Ade0a17ECC321fD13a19e81cE82', // mixed case → case-insensitive
+      contractAddresses: [
+        {
+          blockchain: 'binance_smart',
+          contractAddress: '0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82',
+        },
+        { blockchain: 'ethereum', contractAddress: '0x152649ea73beab28c5b49b26eb48f7ead6d4c898' },
+        { blockchain: 'solana', contractAddress: '4qQeZ5LwSz6HuupUu8jCtgXyW1mYQcNbFAW1sWZp89HL' },
+      ],
+    }
+    expect(pickSafetyTarget(cake)).toEqual({
+      chain: 'bsc',
+      contract: '0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82',
+    })
+  })
+
+  it('falls back to ethereum when the singular address matches no listed deployment', () => {
+    const t = pickSafetyTarget({
+      contractAddress: '0xnot_in_the_list',
+      contractAddresses: [
+        { blockchain: 'binance_smart', contractAddress: '0xbsc' },
+        { blockchain: 'ethereum', contractAddress: '0xeth' },
+      ],
+    })
+    expect(t).toEqual({ chain: 'ethereum', contract: '0xeth' })
+  })
+
+  it('falls back to SUPPORTED_CHAINS order when neither canonical nor ethereum apply', () => {
+    // polygon (index 2) outranks arbitrum (index 4); no singular contractAddress given.
+    const t = pickSafetyTarget({
+      contractAddresses: [
+        { blockchain: 'arbitrum-one', contractAddress: '0xarb' },
+        { blockchain: 'polygon-pos', contractAddress: '0xpoly' },
+      ],
+    })
+    expect(t).toEqual({ chain: 'polygon', contract: '0xpoly' })
+  })
+
+  it('reads through a { coin } / { result } wrapper', () => {
+    expect(
+      pickSafetyTarget({
+        coin: { contractAddresses: [{ blockchain: 'base', contractAddress: '0xb' }] },
+      }),
+    ).toEqual({ chain: 'base', contract: '0xb' })
+  })
+
+  it('returns null when no deployment is on a supported chain', () => {
+    expect(
+      pickSafetyTarget({ contractAddresses: [{ blockchain: 'solana', contractAddress: 'soL' }] }),
+    ).toBeNull()
+  })
+
+  it('returns null for missing / empty contractAddresses', () => {
+    expect(pickSafetyTarget({})).toBeNull()
+    expect(pickSafetyTarget({ contractAddresses: [] })).toBeNull()
+    expect(pickSafetyTarget(null)).toBeNull()
   })
 })
 

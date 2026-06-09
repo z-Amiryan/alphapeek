@@ -1,10 +1,11 @@
-import type {
-  Chain,
-  Holding,
-  TokenFlag,
-  TokenSummary,
-  WalletPnl,
-  WalletSummary,
+import {
+  type Chain,
+  type Holding,
+  SUPPORTED_CHAINS,
+  type TokenFlag,
+  type TokenSummary,
+  type WalletPnl,
+  type WalletSummary,
 } from '@alphapeek/shared'
 import type { Env } from './env'
 
@@ -85,6 +86,13 @@ const WALLET_CHAIN: Record<Chain, string> = {
   optimism: 'optimism-wallet',
   avalanche: 'avalanche-wallet',
 }
+
+// Inverse of COINS_CHAIN. A coin's contractAddresses[].blockchain uses the SAME slug
+// namespace as `/coins?blockchains=` (verified live 2026-06-09), so each slug maps
+// straight back to one of our Chains. Derived from COINS_CHAIN so the two can't drift.
+const CHAIN_BY_COINS_SLUG: Record<string, Chain> = Object.fromEntries(
+  SUPPORTED_CHAINS.map((c): [string, Chain] => [COINS_CHAIN[c], c]),
+)
 
 // The ONLY place X-API-KEY is attached. Never leak the key past this boundary.
 async function cs(env: Env, path: string, params: Record<string, string>): Promise<unknown> {
@@ -210,12 +218,42 @@ export function normalizeChart(payload: unknown): number[] {
   return out
 }
 
-// Token detail WITHOUT the chart — the sparkline is fetched and cached separately
-// (see fetchChart + index.ts) so a flaky chart call can't pin an empty sparkline on
-// the whole token entry for the token TTL.
-export async function fetchTokenDetail(env: Env, coinId: string): Promise<TokenSummary> {
-  const details = await cs(env, `/coins/${encodeURIComponent(coinId)}`, {})
-  return normalizeToken(coinId, details, [])
+// Raw `/coins/{id}` payload, returned un-normalized so a single fetch feeds BOTH
+// normalizeToken and pickSafetyTarget — the ticker path needs contractAddresses to
+// derive a GoPlus scan target without a second call. The chart is fetched + cached
+// separately (see fetchChart + buildToken) so a flaky chart can't pin a blank sparkline.
+export async function fetchCoinDetailRaw(env: Env, coinId: string): Promise<unknown> {
+  return cs(env, `/coins/${encodeURIComponent(coinId)}`, {})
+}
+
+// Derives the (chain, contract) to scan with GoPlus from a coin's contractAddresses —
+// the ticker path has no hovered address. Prefers the canonical singular
+// `contractAddress` deployment (verified: CAKE's single is its BSC-native entry, not the
+// ETH bridge), then ethereum, then SUPPORTED_CHAINS order. Returns null when no
+// deployment is on a supported chain (e.g. a Solana-native coin) → safety stays absent.
+export function pickSafetyTarget(detail: unknown): { chain: Chain; contract: string } | null {
+  const rec = asRecord(detail)
+  const coin = asRecord(rec?.coin) ?? asRecord(rec?.result) ?? rec
+  if (!coin) return null
+  const entries = Array.isArray(coin.contractAddresses) ? coin.contractAddresses : []
+  const candidates: { chain: Chain; contract: string }[] = []
+  for (const entry of entries) {
+    const er = asRecord(entry)
+    if (!er) continue
+    const chain = CHAIN_BY_COINS_SLUG[pickString(er, 'blockchain')]
+    const contract = pickString(er, 'contractAddress')
+    if (chain && contract) candidates.push({ chain, contract })
+  }
+  if (candidates.length === 0) return null
+  const canonical = pickString(coin, 'contractAddress').toLowerCase()
+  return (
+    candidates.find((c) => c.contract.toLowerCase() === canonical) ??
+    candidates.find((c) => c.chain === 'ethereum') ??
+    [...candidates].sort(
+      (a, b) => SUPPORTED_CHAINS.indexOf(a.chain) - SUPPORTED_CHAINS.indexOf(b.chain),
+    )[0] ??
+    null
+  )
 }
 
 // Best-effort 7-day sparkline. Returns `null` on failure OR an empty result so the

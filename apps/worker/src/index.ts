@@ -6,10 +6,12 @@ import {
   UpstreamError,
   detectTokenCoinId,
   fetchChart,
+  fetchCoinDetailRaw,
   fetchFearGreed,
-  fetchTokenDetail,
   fetchWallet,
   fetchWalletPnl,
+  normalizeToken,
+  pickSafetyTarget,
 } from './coinstats'
 import { fetchDexToken } from './dexscreener'
 import { type Env, WORKER_VERSION } from './env'
@@ -17,6 +19,9 @@ import { fetchTokenSafety } from './goplus'
 import { withinDailyCap, withinIpLimit } from './ratelimit'
 
 const ADDRESS_RE = /^0x[a-f0-9]{40}$/
+// CoinStats coin-id slug (e.g. `pepe`, `pancakeswap-token`). Conservative — the ticker
+// path only ever sends ids from our own top-1000 whitelist, but validate defensively.
+const COIN_ID_RE = /^[a-z0-9][a-z0-9._-]{0,80}$/
 
 // Kind-cache sentinel for addresses that are not token contracts.
 const NOT_A_TOKEN = 'addr:'
@@ -120,6 +125,64 @@ app.get('/v1/lookup', async (c) => {
   }
 })
 
+// v0.2 — $TICKER path. The extension resolves a cashtag to a coinId via its preloaded
+// top-1000 whitelist and looks it up here. The safety chain is derived from the coin's
+// contractAddresses (pickSafetyTarget), so no chain param is needed.
+app.get('/v1/coin', async (c) => {
+  const coinId = (c.req.query('coinId') ?? '').toLowerCase()
+  if (!COIN_ID_RE.test(coinId)) {
+    return c.json<LookupError>({ error: 'invalid_address' }, 400)
+  }
+
+  try {
+    const result = (await buildToken(c.env, coinId, 'derive')) ?? { kind: 'unknown' }
+    c.header('Cache-Control', 'public, max-age=60')
+    return c.json<LookupResult>(result)
+  } catch (err) {
+    if (err instanceof UpstreamError) {
+      return c.json<LookupError>({ error: 'upstream_error' }, 503)
+    }
+    throw err
+  }
+})
+
+type SafetyTarget = { chain: Chain; contract: string }
+
+// Assembles a token card from a coinId: cached raw detail (so we can also derive the
+// safety target) + parallel cached chart + cached GoPlus safety. Shared by the address
+// path (explicit target = the hovered contract+chain) and the ticker path ('derive' =
+// target read from the coin's contractAddresses). Returns null if the detail is empty.
+async function buildToken(
+  env: Env,
+  coinId: string,
+  safety: SafetyTarget | 'derive',
+): Promise<LookupResult | null> {
+  const detail = await cached(env, `token:${coinId}`, TOKEN_TTL, () =>
+    fetchCoinDetailRaw(env, coinId),
+  )
+  if (!detail) return null
+  const token = normalizeToken(coinId, detail, [])
+  const target = safety === 'derive' ? pickSafetyTarget(detail) : safety
+  // Chart and safety are independent, best-effort, each on its own TTL — fan out in
+  // parallel so neither stacks onto the detail latency.
+  const [sparkline, safetyResult] = await Promise.all([
+    cached(env, `chart:${coinId}`, CHART_TTL, () => fetchChart(env, coinId)),
+    target
+      ? cached(env, `safety:${target.chain}:${target.contract}`, SAFETY_TTL, () =>
+          fetchTokenSafety(env, target.contract, target.chain),
+        )
+      : Promise.resolve(null),
+  ])
+  return {
+    kind: 'token',
+    data: {
+      ...token,
+      sparkline: sparkline ?? [],
+      ...(safetyResult ? { safety: safetyResult } : {}),
+    },
+  }
+}
+
 // Layered cache per SPEC §4: stable kind lookup gates the expensive wallet call.
 async function resolve(env: Env, addr: string, chain: Chain): Promise<LookupResult> {
   const kind = await cached(env, `kind:${chain}:${addr}`, KIND_TTL, async () => {
@@ -128,25 +191,9 @@ async function resolve(env: Env, addr: string, chain: Chain): Promise<LookupResu
   })
 
   if (kind && kind !== NOT_A_TOKEN) {
-    const token = await cached(env, `token:${kind}`, TOKEN_TTL, () => fetchTokenDetail(env, kind))
-    if (token) {
-      // Chart and safety scan are independent, best-effort, and each cached on its
-      // own TTL — fan them out in parallel so neither stacks onto the token latency.
-      const [sparkline, safety] = await Promise.all([
-        cached(env, `chart:${kind}`, CHART_TTL, () => fetchChart(env, kind)),
-        cached(env, `safety:${chain}:${addr}`, SAFETY_TTL, () =>
-          fetchTokenSafety(env, addr, chain),
-        ),
-      ])
-      return {
-        kind: 'token',
-        data: {
-          ...token,
-          sparkline: sparkline ?? [],
-          ...(safety ? { safety } : {}),
-        },
-      }
-    }
+    // Safety target is the hovered contract on the inferred chain (no derivation needed).
+    const result = await buildToken(env, kind, { chain, contract: addr })
+    if (result) return result
   }
 
   const wallet = await cached(env, `wallet:${chain}:${addr}`, WALLET_TTL, () =>

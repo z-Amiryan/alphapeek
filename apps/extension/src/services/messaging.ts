@@ -14,6 +14,16 @@ export async function requestLookup(addr: string, chain: Chain): Promise<LookupR
   }
 }
 
+export async function requestCoinLookup(coinId: string): Promise<LookupResponse> {
+  try {
+    const res = await browser.runtime.sendMessage({ type: 'COIN_LOOKUP', coinId })
+    return res as LookupResponse
+  } catch (err) {
+    debugError('COIN_LOOKUP message failed', err)
+    return { ok: false, error: 'upstream_error' }
+  }
+}
+
 export async function requestFearGreed(): Promise<FearGreedResponse> {
   try {
     const res = await browser.runtime.sendMessage({ type: 'FEAR_GREED' })

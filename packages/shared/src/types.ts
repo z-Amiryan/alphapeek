@@ -185,11 +185,19 @@ export type LookupRequest = {
   chain: Chain
 }
 
+// v0.2 — $TICKER (cashtag) path. A cashtag resolves to a CoinStats coinId via the
+// extension's preloaded top-1000 whitelist; the Worker derives the safety chain from
+// the coin's contractAddresses, so no chain is sent.
+export type CoinLookupRequest = {
+  type: 'COIN_LOOKUP'
+  coinId: string
+}
+
 export type FearGreedRequest = {
   type: 'FEAR_GREED'
 }
 
-export type RuntimeRequest = LookupRequest | FearGreedRequest
+export type RuntimeRequest = LookupRequest | CoinLookupRequest | FearGreedRequest
 
 // Discriminated envelope: errors surface as `{ ok: false }` rather than throwing
 // across the message boundary, so callers branch on `ok` before touching `data`.

@@ -2,7 +2,7 @@
 
 > **Agent rule:** Do not implement features outside the current version's scope without explicit user approval. If you encounter an opportunity that looks "easy to add" — note it in a `// TODO(v0.2):` comment, do not build it.
 
-## v0.1 — Wallet Inspector for X (CURRENT)
+## v0.1 — Wallet Inspector for X (DONE)
 
 **Goal:** Validate the hover-card interaction model on a single high-traffic site.
 
@@ -41,7 +41,7 @@ working across both chains; BSC required slug fixes (see SPEC § 4).
 - Wallet PnL → v0.2 (extra credit cost, deliberate v0.2 decision)
 - DeFi positions → v0.2
 
-## v0.2 — Safety-first (NEXT)
+## v0.2 — Safety-first (CURRENT · BETA)
 
 **Goal:** Make safety the headline. Lead with a free contract-risk verdict on every
 token card (the unique value proposition now that Hexens/Token Risks is out), plus a

@@ -1,4 +1,4 @@
-# SPEC.md — Technical Specification (v0.1)
+# SPEC.md — Technical Specification (v0.2-beta)
 
 ## 1. Architecture
 

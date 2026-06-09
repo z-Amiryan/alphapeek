@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/license-MIT-c6f432" alt="MIT License" />
   <img src="https://img.shields.io/badge/manifest-v3-0d0d0d" alt="Manifest V3" />
-  <img src="https://img.shields.io/badge/status-v0.1%20pre--release-555" alt="Status" />
+  <img src="https://img.shields.io/badge/status-v0.2--beta-555" alt="Status" />
 </p>
 
 ---

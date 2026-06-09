@@ -151,9 +151,11 @@ type TokenSummary = {
   pCh24h: number
   marketCap: number
   volume: number
-  sparkline: number[]  // 7d, ~168 points
+  sparkline: number[]  // 7d, ~168 points (empty for DexScreener-sourced tokens — no free history)
   flags: TokenFlag[]   // 'low_liquidity' | 'high_volatility' — market-data hints, not a safety verdict
   safety?: TokenSafety // v0.2: GoPlus contract-safety scan (shape in §6); best-effort, absent if unavailable
+  source: 'coinstats' | 'dexscreener'  // v0.2: data provider; 'dexscreener' = free zero-credit fallback
+  url?: string         // v0.2: external page (the DexScreener pair) when source='dexscreener'
 }
 
 type WalletSummary = {
@@ -191,6 +193,7 @@ Returns `{ ok: true, version: string }`. No auth, no rate limit.
 | KV `CACHE` | `wallet:{chain}:{addr}` | 300 seconds | Balances change but slowly |
 | KV `CACHE` | `pnl:{chain}:{addr}` | 300 seconds | All-time PnL (v0.2); tracks the wallet TTL |
 | KV `CACHE` | `safety:{chain}:{addr}` | 6 hours | GoPlus contract-safety scan (v0.2); slow-moving, but a renounce/blacklist flip should surface same-day |
+| KV `CACHE` | `dex:{addr}` | 60 seconds | DexScreener coverage fallback (v0.2); address-keyed (chain-agnostic). Short TTL — fresh/long-tail tokens move fast — but enough to collapse a viral burst on one address against DexScreener's per-IP rate limit |
 
 > The Worker sends `Cache-Control: public, max-age=…` on `/v1/lookup` and `/v1/fear-greed`
 > responses (a hint for the browser / service-worker HTTP cache). There is intentionally
@@ -239,8 +242,35 @@ fire on legit tokens (CAKE/AAVE/PEPE), so they're informational `notes`, never
 verdict-driving. Best-effort: a scan failure or unsupported chain leaves `safety`
 undefined and the card renders without it.
 
-**Chain slugs differ PER ENDPOINT — three namespaces (verified live 2026-06-02).** Do not share
-one map. `/coins?blockchains=` uses CoinStats' internal "chain" slugs; `/wallet/balance` uses the
+### DexScreener coverage fallback (v0.2 — external, free, keyless)
+
+Not a CoinStats endpoint. `GET {DEXSCREENER_BASE_URL}/latest/dex/tokens/{addr}`
+(`api.dexscreener.com`). **No API key, no CoinStats credit, no daily-cap impact** — the same
+free-source model as GoPlus. `apps/worker/src/dexscreener.ts` normalizes the response into a
+`TokenSummary` (`source:'dexscreener'`).
+
+**Fires ONLY on a CoinStats miss** — the principle is *CoinStats-first; a free source only fills
+what CoinStats can't*. In `resolve()` it runs after both `detectTokenCoinId` → null **and** the
+wallet path is empty, immediately before returning `unknown`. It never replaces a working CoinStats
+path, so it adds **zero** CoinStats credits (the detect + wallet probe were already spent on what
+would otherwise have been an `unknown`). Covers the three CoinStats coverage gaps: ~hours indexing
+latency (fresh tokens), the long tail, and **wrong-chain inference** (the chosen pair's `chainId` is
+authoritative, so a bad `chain` guess no longer hides an indexed token).
+
+- **Pair selection:** among pairs whose `chainId` maps to one of our 7 supported chains, pick the
+  highest `liquidity.usd`. Below `MIN_LIQUIDITY_USD` (10,000) → `null` (stay `unknown`; never a
+  confident card for a dust/honeypot pair). The chosen pair's `chainId` is the **authoritative
+  chain**, used both for the card and for the GoPlus scan that follows (`safety:{chain}:{addr}`).
+- **DexScreener uses its OWN chain-slug namespace** (`ethereum`, `bsc`, `base`, `arbitrum`,
+  `polygon`, `optimism`, `avalanche` — NOT CoinStats' `binance_smart`/`polygon-pos`). The worker
+  keeps a separate `DEX_CHAIN` map; do not reuse `COINS_CHAIN`. Verified live 2026-06-09.
+- **Best-effort:** a failure, timeout (2.5s), `429`, or below-floor result returns `null` and the
+  lookup falls through to the `unknown` card. `sparkline` is empty (no free historical series).
+- **Rate limit:** DexScreener's free tier is per-IP; the Worker is the caller (shared Cloudflare
+  egress). The `dex:{addr}` KV cache (60s) absorbs bursts; on `429` we degrade silently.
+
+**Chain slugs differ PER ENDPOINT — three CoinStats namespaces (verified live 2026-06-02), plus a
+fourth for DexScreener (above).** Do not share one map. `/coins?blockchains=` uses CoinStats' internal "chain" slugs; `/wallet/balance` uses the
 `connectionId` from `GET /wallet/blockchains` (NOT a `blockchain` param). The worker keeps two
 maps (`COINS_CHAIN`, `WALLET_CHAIN`) in `apps/worker/src/coinstats.ts`.
 
@@ -464,6 +494,8 @@ export type TokenSummary = {
   sparkline: number[]
   flags: TokenFlag[]    // market-data hints only — NOT a safety verdict
   safety?: TokenSafety  // v0.2: best-effort; absent when the scan is unavailable
+  source: 'coinstats' | 'dexscreener'  // v0.2: 'dexscreener' = free zero-credit coverage fallback
+  url?: string          // v0.2: DexScreener pair URL when source='dexscreener'
 }
 
 // v0.2 — wallet performance. CoinStats exposes fixed buckets (no 30-day window),
@@ -542,8 +574,12 @@ If a budget is exceeded after honest effort, document the gap in the PR and deci
 - **No persistent watchlist** — in v0.3 with optional account
 - **No alerts/notifications** — in v0.3
 - **Chain inference is best-effort** — Twitter has no URL context, may guess wrong chain
-- **Not a launch-sniping tool — ~hours of indexing latency.** CoinStats indexes new tokens within
-  a few hours of launch (a ~1h-old token returns `unknown`; ~9h-old resolves), regardless of
-  liquidity. AlphaPeek is a **trending/established-token inspector**, not a minute-zero ape tool.
-  Tokens too new to be indexed should render a dedicated **"Too new — not indexed yet"** card
-  (with a DexScreener link), never a generic error. Market the product accordingly.
+- **Indexing latency — largely closed in v0.2 by the DexScreener fallback.** CoinStats indexes new
+  tokens within a few hours of launch (a ~1h-old token returns `unknown` from CoinStats; ~9h-old
+  resolves), regardless of liquidity. As of v0.2 a CoinStats miss now falls through to the free
+  **DexScreener** fallback (§4), so fresh / long-tail / wrong-chain-inferred EVM tokens with real
+  liquidity (≥ `MIN_LIQUIDITY_USD`) render a full token card + GoPlus verdict instead of `unknown`.
+  Remaining `unknown` cases (sub-floor liquidity, non-supported chains, brand-new pairs not yet on
+  DexScreener) render the [UnknownView] last-resort card, which links to both the block explorer and
+  a DexScreener search. AlphaPeek is still a trending/established-token inspector at heart, but the
+  fresh-token cliff is no longer a hard wall.

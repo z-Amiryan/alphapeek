@@ -11,6 +11,7 @@ import {
   fetchWallet,
   fetchWalletPnl,
 } from './coinstats'
+import { fetchDexToken } from './dexscreener'
 import { type Env, WORKER_VERSION } from './env'
 import { fetchTokenSafety } from './goplus'
 import { withinDailyCap, withinIpLimit } from './ratelimit'
@@ -32,6 +33,9 @@ const CHART_TTL = 900
 const SAFETY_TTL = 6 * 60 * 60
 const WALLET_TTL = 300
 const FEAR_GREED_TTL = 300
+// Short — DexScreener-sourced tokens are fresh/long-tail and move fast; still long enough
+// to collapse a viral burst on one address against DexScreener's per-IP rate limit.
+const DEX_TTL = 60
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -155,6 +159,18 @@ async function resolve(env: Env, addr: string, chain: Chain): Promise<LookupResu
       fetchWalletPnl(env, addr, chain),
     )
     return { kind: 'wallet', data: { ...wallet, ...(pnl ? { pnl } : {}) } }
+  }
+
+  // CoinStats had nothing (not a token, not a wallet). Try the free, zero-credit DexScreener
+  // fallback before giving up — it covers fresh / long-tail / wrong-chain-inferred tokens
+  // CoinStats hasn't indexed. CoinStats-first is preserved: this only runs on a miss. The
+  // pair's chain is authoritative, so a wrong `chain` guess no longer hides an indexed token.
+  const dex = await cached(env, `dex:${addr}`, DEX_TTL, () => fetchDexToken(env, addr))
+  if (dex) {
+    const safety = await cached(env, `safety:${dex.chain}:${addr}`, SAFETY_TTL, () =>
+      fetchTokenSafety(env, addr, dex.chain),
+    )
+    return { kind: 'token', data: { ...dex.token, ...(safety ? { safety } : {}) } }
   }
 
   return { kind: 'unknown' }

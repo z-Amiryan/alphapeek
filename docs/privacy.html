@@ -92,7 +92,7 @@
   </ul>
 
   <h2>Third parties</h2>
-  <p>When AlphaPeek looks up an address, the proxy sends that address to the <a href="https://coinstats.app/api-docs/">CoinStats Public API</a> to fetch token or wallet data. For <strong>token contracts</strong>, the proxy also sends the contract address to the <a href="https://gopluslabs.io/">GoPlus Token Security API</a> for a free, keyless contract-safety scan. Each provider&rsquo;s own privacy policy applies to that interaction. Your browser never contacts CoinStats or GoPlus directly &mdash; all requests go through the proxy.</p>
+  <p>When AlphaPeek looks up an address, the proxy sends that address to the <a href="https://coinstats.app/api-docs/">CoinStats Public API</a> to fetch token or wallet data. For <strong>token contracts</strong>, the proxy also sends the contract address to the <a href="https://gopluslabs.io/">GoPlus Token Security API</a> for a free, keyless contract-safety scan. If CoinStats has no data for the address, the proxy additionally sends it to the <a href="https://dexscreener.com/">DexScreener API</a> &mdash; a free, keyless market-data lookup &mdash; as a coverage fallback for newer or less-indexed tokens. Each provider&rsquo;s own privacy policy applies to that interaction. Your browser never contacts CoinStats, GoPlus, or DexScreener directly &mdash; all requests go through the proxy.</p>
 
   <h2>Local storage on your device</h2>
   <p>AlphaPeek uses two browser storage mechanisms:</p>

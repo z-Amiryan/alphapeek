@@ -39,7 +39,7 @@ const STABLECOINS: ReadonlySet<string> = new Set([
 const LOW_LIQUIDITY_VOLUME_USD = 50_000
 const HIGH_VOLATILITY_ABS_PCT = 25
 
-function deriveTokenFlags(volume: number, pCh24h: number): TokenFlag[] {
+export function deriveTokenFlags(volume: number, pCh24h: number): TokenFlag[] {
   const flags: TokenFlag[] = []
   // Thin 24h volume → hard to exit without slippage. volume === 0 means missing data, not zero.
   if (volume > 0 && volume < LOW_LIQUIDITY_VOLUME_USD) flags.push('low_liquidity')
@@ -189,6 +189,7 @@ export function normalizeToken(
     volume,
     sparkline: chartPoints,
     flags: deriveTokenFlags(volume, pCh24h),
+    source: 'coinstats',
   }
 }
 

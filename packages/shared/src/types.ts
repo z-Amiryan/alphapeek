@@ -74,6 +74,14 @@ export type TokenSafety = {
   source: 'goplus'
 }
 
+/**
+ * Where a token card's market data came from. `coinstats` is the default path;
+ * `dexscreener` is the free zero-credit fallback used only when CoinStats has no
+ * data for the address (fresh / long-tail / wrong-chain-inferred tokens). The UI
+ * branches its primary link on this (CoinStats coin page vs the DexScreener pair).
+ */
+export type TokenSource = 'coinstats' | 'dexscreener'
+
 export type TokenSummary = {
   coinId: string
   name: string
@@ -93,6 +101,10 @@ export type TokenSummary = {
    * the card renders fully without it.
    */
   safety?: TokenSafety
+  /** Data provider for this card (see TokenSource). Defaults to 'coinstats'. */
+  source: TokenSource
+  /** External page for the token (the DexScreener pair URL when source='dexscreener'). */
+  url?: string
 }
 
 export type Holding = {

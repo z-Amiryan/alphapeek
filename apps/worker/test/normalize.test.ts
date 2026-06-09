@@ -6,6 +6,7 @@ import {
   normalizeWallet,
   normalizeWalletPnl,
 } from '../src/coinstats'
+import { normalizeDexToken } from '../src/dexscreener'
 import { normalizeSafety } from '../src/goplus'
 
 const ADDRESS_RE = /^0x[a-f0-9]{40}$/
@@ -233,5 +234,118 @@ describe('normalizeFearGreed', () => {
       value: 52,
       label: 'Neutral',
     })
+  })
+})
+
+describe('normalizeToken source', () => {
+  it('stamps source=coinstats on the CoinStats path', () => {
+    expect(normalizeToken('pepe', { symbol: 'pepe' }, []).source).toBe('coinstats')
+  })
+})
+
+describe('normalizeDexToken', () => {
+  const ADDR = '0xtoken00000000000000000000000000000000aa'
+
+  // DexScreener: priceUsd is a string, the rest numbers; pairs span DEX/chain variants.
+  it('picks the highest-liquidity supported-chain pair as authoritative', () => {
+    const out = normalizeDexToken(ADDR, {
+      pairs: [
+        {
+          chainId: 'ethereum', // higher price but LOWER liquidity → must not win
+          url: 'https://dexscreener.com/ethereum/0xeth',
+          baseToken: { address: ADDR, name: 'Brett', symbol: 'brett' },
+          quoteToken: { address: '0xusdc', name: 'USD Coin', symbol: 'USDC' },
+          priceUsd: '0.051',
+          priceChange: { h24: 4 },
+          liquidity: { usd: 20_000 },
+          volume: { h24: 50_000 },
+          marketCap: 0,
+          info: { imageUrl: 'http://img/eth.png' },
+        },
+        {
+          chainId: 'base', // highest liquidity → authoritative chain
+          url: 'https://dexscreener.com/base/0xbase',
+          baseToken: { address: ADDR, name: 'Brett', symbol: 'brett' },
+          quoteToken: { address: '0xweth', name: 'WETH', symbol: 'WETH' },
+          priceUsd: '0.05',
+          priceChange: { h24: 30 }, // ≥25 → high_volatility
+          liquidity: { usd: 800_000 },
+          volume: { h24: 2_000_000 }, // healthy → no low_liquidity
+          marketCap: 500_000_000,
+          fdv: 600_000_000,
+          info: { imageUrl: 'http://img/base.png' },
+        },
+      ],
+    })
+    expect(out?.chain).toBe('base')
+    expect(out?.token.symbol).toBe('BRETT')
+    expect(out?.token.price).toBe(0.05)
+    expect(out?.token.marketCap).toBe(500_000_000)
+    expect(out?.token.volume).toBe(2_000_000)
+    expect(out?.token.source).toBe('dexscreener')
+    expect(out?.token.url).toBe('https://dexscreener.com/base/0xbase')
+    expect(out?.token.coinId).toBe(ADDR)
+    expect(out?.token.sparkline).toEqual([])
+    expect(out?.token.flags).toContain('high_volatility')
+    expect(out?.token.flags).not.toContain('low_liquidity')
+  })
+
+  it('falls back to fdv when marketCap is absent', () => {
+    const out = normalizeDexToken(ADDR, {
+      pairs: [
+        {
+          chainId: 'bsc',
+          url: 'u',
+          baseToken: { address: ADDR, name: 'X', symbol: 'x' },
+          priceUsd: '1',
+          priceChange: { h24: 1 },
+          liquidity: { usd: 50_000 },
+          volume: { h24: 100_000 },
+          fdv: 1_234,
+          info: {},
+        },
+      ],
+    })
+    expect(out?.chain).toBe('bsc')
+    expect(out?.token.marketCap).toBe(1_234)
+  })
+
+  it('returns null below the dust-liquidity floor', () => {
+    expect(
+      normalizeDexToken(ADDR, {
+        pairs: [
+          {
+            chainId: 'base',
+            baseToken: { address: ADDR, symbol: 'scam' },
+            priceUsd: '0.00001',
+            liquidity: { usd: 500 }, // < MIN_LIQUIDITY_USD
+            volume: { h24: 9 },
+          },
+        ],
+      }),
+    ).toBeNull()
+  })
+
+  it('ignores pairs on unsupported chains', () => {
+    expect(
+      normalizeDexToken(ADDR, {
+        pairs: [
+          {
+            chainId: 'solana', // not in DEX_CHAIN
+            baseToken: { address: ADDR, symbol: 'sol' },
+            priceUsd: '1',
+            liquidity: { usd: 9_000_000 },
+            volume: { h24: 1_000_000 },
+          },
+        ],
+      }),
+    ).toBeNull()
+  })
+
+  it('returns null for empty / malformed payloads', () => {
+    expect(normalizeDexToken(ADDR, {})).toBeNull()
+    expect(normalizeDexToken(ADDR, { pairs: [] })).toBeNull()
+    expect(normalizeDexToken(ADDR, { pairs: null })).toBeNull()
+    expect(normalizeDexToken(ADDR, null)).toBeNull()
   })
 })

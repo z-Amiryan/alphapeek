@@ -29,7 +29,7 @@ The proxy does **not** log:
 
 ## Third parties
 
-When AlphaPeek looks up an address, the proxy sends that address to the [CoinStats Public API](https://coinstats.app/api-docs/) to fetch token or wallet data. For **token contracts**, the proxy also sends the contract address to the [GoPlus Token Security API](https://gopluslabs.io/) for a free, keyless contract-safety scan. Each provider's own privacy policy applies to that interaction. Your browser never contacts CoinStats or GoPlus directly — all requests go through the proxy.
+When AlphaPeek looks up an address, the proxy sends that address to the [CoinStats Public API](https://coinstats.app/api-docs/) to fetch token or wallet data. For **token contracts**, the proxy also sends the contract address to the [GoPlus Token Security API](https://gopluslabs.io/) for a free, keyless contract-safety scan. If CoinStats has no data for the address, the proxy additionally sends it to the [DexScreener API](https://dexscreener.com/) — a free, keyless market-data lookup — as a coverage fallback for newer or less-indexed tokens. Each provider's own privacy policy applies to that interaction. Your browser never contacts CoinStats, GoPlus, or DexScreener directly — all requests go through the proxy.
 
 ## Local storage on your device
 

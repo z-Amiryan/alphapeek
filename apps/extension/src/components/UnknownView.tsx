@@ -2,7 +2,7 @@
 // says what we honestly know, plus a block-explorer link. CoinStats has a
 // few-hour indexing lag (SPEC §9), so a brand-new contract can land here too.
 import type { Chain } from '@alphapeek/shared'
-import { explorerAddressUrl, explorerName } from '@/lib/chain'
+import { dexScreenerSearchUrl, explorerAddressUrl, explorerName } from '@/lib/chain'
 import { truncateAddress } from '@/lib/format'
 import { ArrowOut } from './icons'
 import { BTN } from './ui'
@@ -35,7 +35,16 @@ export function UnknownView({ addr, chain }: Props) {
           rel="noopener noreferrer"
           className={BTN}
         >
-          Check on {explorerName(chain)} <ArrowOut />
+          {explorerName(chain)} <ArrowOut />
+        </a>
+        {/* A fresh token too new even for DexScreener's free index can still surface here. */}
+        <a
+          href={dexScreenerSearchUrl(addr)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={BTN}
+        >
+          DexScreener <ArrowOut />
         </a>
       </div>
     </div>

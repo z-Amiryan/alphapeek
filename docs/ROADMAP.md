@@ -59,6 +59,14 @@ Twitter. Built this cut (status below); breadth items deferred within v0.2.
   balance. CoinStats exposes fixed buckets (allTime / 24h / unrealized / realized) —
   **no 30-day window**, so the surfaced signal is **all-time** PnL (strongest "ever
   been profitable" read). Extra credit cost (25cr), only spent on confirmed wallets.
+- **DexScreener coverage fallback (free, keyless, zero-credit).** When CoinStats returns
+  `unknown` for a token address (detect→null + empty wallet), the Worker falls through to
+  DexScreener (`api.dexscreener.com`), covering the three CoinStats coverage gaps: ~hours
+  indexing latency (fresh tokens), the long tail (outside CoinStats' index), and **wrong-chain
+  inference** (the chosen pair's `chainId` is authoritative, rescuing tokens a bad chain-guess
+  would have hidden). **CoinStats-first is preserved** — it only fires on a miss, so it adds
+  zero CoinStats credits; GoPlus safety then runs on the authoritative chain. A
+  `MIN_LIQUIDITY_USD` floor + silent degrade-to-`unknown` keep it honest. See SPEC §4.
 
 **Deferred within v0.2 / later (still planned, not this cut):**
 - **Inline badge mode** (opt-in setting): tiny colored dot after each detected address, scanned on viewport entry. Hover-only stays as default for privacy/credit reasons.

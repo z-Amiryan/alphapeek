@@ -438,6 +438,7 @@ export default defineConfig({
    - Send a `LOOKUP` message to background SW.
    - On response, mount the React hover card in Shadow DOM, positioned via Floating UI.
 4. On `mouseout` from the address AND the card, dismiss after 100ms grace period.
+5. On `scroll` (capture phase, any container), dismiss immediately — standard hover-tooltip behavior, and it prevents a card from chasing a tweet that X recycles mid-scroll (which would leave Floating UI pinning an orphaned card to the 0,0 top-left corner). A monotonic show-generation counter guards the async show path (pre-flight + mount awaits) so two concurrent shows for the same target can't both mount and orphan one.
 
 **Address detection (`lib/regex.ts`):**
 ```ts

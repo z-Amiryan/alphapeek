@@ -52,6 +52,11 @@ export default defineContentScript({
     let card: CardHandle | null = null
     let cardKey: string | null = null
     let pointerOnCard = false
+    // Monotonic show-generation. Every reset / new schedule bumps it; an in-flight showCard
+    // captures its value and aborts after each await if a newer show has started. Without this,
+    // two concurrent showCards for the same target (the pre-flight + mount awaits widen the
+    // window) both mount, and the untracked first card orphans — the frozen top-left ghost.
+    let showSeq = 0
     // Live cursor position, used to sanity-check dismissals against real geometry.
     let lastX = 0
     let lastY = 0
@@ -59,6 +64,7 @@ export default defineContentScript({
     ensureUnderlineStyle()
 
     function reset(): void {
+      showSeq++
       clearTimeout(hoverTimer)
       clearTimeout(dismissTimer)
       hoverTimer = undefined
@@ -107,18 +113,23 @@ export default defineContentScript({
       scheduleDismiss()
     }
 
-    async function showCard(anchor: HTMLElement, target: Target): Promise<void> {
+    async function showCard(anchor: HTMLElement, target: Target, seq: number): Promise<void> {
       hoverTimer = undefined
       const key = targetKey(target)
-      // Bail if the target changed while the timer was pending.
-      if (activeAnchor !== anchor || !pendingTarget || targetKey(pendingTarget) !== key) return
+      // Superseded if a newer show/reset bumped the generation, or the active target moved on.
+      const stale = (): boolean =>
+        seq !== showSeq ||
+        activeAnchor !== anchor ||
+        !pendingTarget ||
+        targetKey(pendingTarget) !== key
+      if (stale()) return
 
       // Long-tail $symbol: confirm the Worker resolves it to a single token BEFORE showing
       // anything, so a hovered slang word neither flashes an underline nor pops a "No data"
       // card. The result is cached, so the card's own lookup below is an instant cache hit.
       if (target.kind === 'symbol') {
         const res = await requestSymbolLookup(target.symbol)
-        if (activeAnchor !== anchor || !pendingTarget || targetKey(pendingTarget) !== key) return
+        if (stale()) return
         if (!res.ok || res.data.kind !== 'token') return
         anchor.classList.add(UNDERLINE_CLASS)
       }
@@ -146,8 +157,8 @@ export default defineContentScript({
             scheduleDismiss()
           },
         })
-        // Target may have changed during the async mount; discard if so.
-        if (activeAnchor !== anchor || !pendingTarget || targetKey(pendingTarget) !== key) {
+        // A newer show started during the async mount → discard this one so it can't orphan.
+        if (stale()) {
           handle.remove()
           return
         }
@@ -174,8 +185,10 @@ export default defineContentScript({
       }
       pendingTarget = target
 
+      // Capture the generation this show belongs to so a later show/reset can supersede it.
+      const seq = ++showSeq
       hoverTimer = setTimeout(() => {
-        void showCard(anchor, target)
+        void showCard(anchor, target, seq)
       }, HOVER_DELAY)
     }
 
@@ -222,10 +235,20 @@ export default defineContentScript({
       scheduleShow(anchor, target)
     }
 
+    // Scrolling the feed dismisses the card (standard hover-tooltip behavior). On X's
+    // virtualized timeline the anchor's tweet gets recycled mid-scroll, which would leave
+    // a card chasing a detached node (Floating UI then pins it to 0,0 — the top-left ghost);
+    // closing on scroll avoids that entirely. Capture phase catches scrolls in any nested
+    // container, and the card's own internal scroll is fine since the card doesn't scroll.
+    function onScroll(): void {
+      if (activeAnchor || card) reset()
+    }
+
     document.body.addEventListener('mouseover', onMouseOver)
     // Passive cursor tracking so the dismiss-time geometry check uses the live position
     // (mouseover only fires on enter, not while the cursor sits on the address).
     document.addEventListener('mousemove', onMouseMove, { passive: true })
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true })
 
     // X virtualizes its feed: if the anchored node is detached (tweet recycled),
     // tear the card down so it can't dangle (UX edge #5). This is the only job of
@@ -240,6 +263,7 @@ export default defineContentScript({
       observer.disconnect()
       document.body.removeEventListener('mouseover', onMouseOver)
       document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('scroll', onScroll, { capture: true })
     })
   },
 })

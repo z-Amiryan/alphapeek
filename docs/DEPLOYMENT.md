@@ -112,7 +112,7 @@ Required:
 - [ ] **Privacy policy URL:** GitHub Pages URL from step 3
 - [ ] **Single purpose statement:** "AlphaPeek shows wallet and token info when you hover an address on X/Twitter."
 
-> **SEO note:** Chrome Web Store search ranking lives in the **listing copy**, not in the code. The discoverability levers are the **detailed description** (work in keywords naturally: wallet, token, EVM, X/Twitter, balances, holdings, price, hover) and the **5 keyword/tag fields** in the dashboard. The manifest `description` only seeds the short description; update the listing copy to actually move SEO.
+> **SEO note:** Chrome Web Store search ranking lives in the **listing copy**, not in the code. The only discoverability lever is the **detailed description** — work keywords in *naturally* (wallet, token, EVM, X/Twitter, balances, holdings, price, hover). There is **no** keyword/tag field, and a standalone keyword list in the description is rejected as spam ([keyword stuffing](https://developer.chrome.com/docs/webstore/troubleshooting/#keyword-stuffing)). The manifest `description` only seeds the short description; update the listing copy to actually move SEO.
 
 ### 🚨 ASK USER: Permission justification
 

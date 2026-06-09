@@ -1,9 +1,9 @@
 # Chrome Web Store listing copy — AlphaPeek v0.1
 
-> Ready-to-paste copy for the Web Store Developer Dashboard. Source of truth for
-> the **detailed description** and **keyword fields** — the two levers that move
-> search ranking (see [DEPLOYMENT.md §4](DEPLOYMENT.md) SEO note). Keep the short
-> description in sync with `wxt.config.ts` `manifest.description`.
+> Ready-to-paste copy for the Web Store Developer Dashboard. Source of truth for the
+> **detailed description** — keywords must read naturally in prose, never as a list
+> (a standalone keyword list is rejected as spam; see [DEPLOYMENT.md §4](DEPLOYMENT.md)
+> SEO note). Keep the short description in sync with `wxt.config.ts` `manifest.description`.
 
 ---
 
@@ -65,7 +65,7 @@ point at an address and peek.
 
 ── HOW IT WORKS ──
 
-AlphaPeek detects EVM addresses (0x…) and contract addresses in tweets and fetches
+AlphaPeek detects EVM wallet and contract addresses (0x…) in tweets and fetches
 read-only market data through a lightweight proxy. It works on x.com and
 twitter.com. Crypto data is powered by CoinStats.
 
@@ -74,21 +74,18 @@ twitter.com. Crypto data is powered by CoinStats.
 AlphaPeek is read-only and informational. It does not give financial advice, does
 not execute transactions, and is not affiliated with X/Twitter. Always do your own
 research.
-
-Keywords: crypto wallet, EVM, Ethereum, token, contract address, balance, holdings,
-portfolio, price, 7-day chart, market cap, Fear and Greed, X, Twitter, on-chain,
-hover, block explorer alternative.
 ```
 
-## Keyword / tag fields (dashboard allows 5)
+## Search keywords — there is no keyword/tag field
 
-```
-1. crypto wallet viewer
-2. EVM token price
-3. Twitter / X crypto
-4. wallet balance hover
-5. on-chain explorer
-```
+The Web Store has **no** keyword or tag input. Search ranking is driven only by the
+**item name**, **short description**, and **detailed description**. Do **not** paste a
+keyword list anywhere — a standalone list triggers the "keyword stuffing" rejection
+(Yellow Argon — see [troubleshooting](https://developer.chrome.com/docs/webstore/troubleshooting/#keyword-stuffing)).
+
+To stay discoverable, make sure these terms appear **naturally in the prose above**
+(they already do): crypto wallet · EVM · token price · contract address · balance ·
+holdings · 7-day chart · market cap · Fear & Greed · X / Twitter · on-chain.
 
 ---
 

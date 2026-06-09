@@ -193,11 +193,23 @@ export type CoinLookupRequest = {
   coinId: string
 }
 
+// v0.2 — long-tail cashtag path. A $SYMBOL that is NOT in the top-1000 whitelist; the
+// Worker resolves it to a single canonical coin via `/coins?symbol=` under a strict
+// single-match + market-cap guard (silent on ambiguity — never a wrong-token card).
+export type SymbolLookupRequest = {
+  type: 'SYMBOL_LOOKUP'
+  symbol: string
+}
+
 export type FearGreedRequest = {
   type: 'FEAR_GREED'
 }
 
-export type RuntimeRequest = LookupRequest | CoinLookupRequest | FearGreedRequest
+export type RuntimeRequest =
+  | LookupRequest
+  | CoinLookupRequest
+  | SymbolLookupRequest
+  | FearGreedRequest
 
 // Discriminated envelope: errors surface as `{ ok: false }` rather than throwing
 // across the message boundary, so callers branch on `ok` before touching `data`.

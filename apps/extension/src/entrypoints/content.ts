@@ -7,7 +7,8 @@ import { type Chain, isChain } from '@alphapeek/shared'
 import { browser } from 'wxt/browser'
 import { inferChainForAddress } from '@/lib/chain'
 import { debugError } from '@/lib/debug'
-import { findAddress, findTicker } from '@/lib/regex'
+import { findAddress, findCashtag } from '@/lib/regex'
+import { requestSymbolLookup } from '@/services/messaging'
 import { DEFAULT_CHAIN_KEY, getDefaultChain } from '@/services/settings'
 import { type CardHandle, type Target, mountCard } from '@/shadow/mount'
 import '@/shadow/styles.css'
@@ -24,7 +25,9 @@ const ACCENT_BY_THEME = { light: '#aad400', dark: '#c6f432' } as const
 
 // Stable identity for a hover target (dedup "already showing this" + post-async checks).
 function targetKey(target: Target): string {
-  return target.kind === 'address' ? `a:${target.addr}` : `c:${target.coinId}`
+  if (target.kind === 'address') return `a:${target.addr}`
+  if (target.kind === 'coin') return `c:${target.coinId}`
+  return `s:${target.symbol}`
 }
 
 export default defineContentScript({
@@ -110,6 +113,16 @@ export default defineContentScript({
       // Bail if the target changed while the timer was pending.
       if (activeAnchor !== anchor || !pendingTarget || targetKey(pendingTarget) !== key) return
 
+      // Long-tail $symbol: confirm the Worker resolves it to a single token BEFORE showing
+      // anything, so a hovered slang word neither flashes an underline nor pops a "No data"
+      // card. The result is cached, so the card's own lookup below is an instant cache hit.
+      if (target.kind === 'symbol') {
+        const res = await requestSymbolLookup(target.symbol)
+        if (activeAnchor !== anchor || !pendingTarget || targetKey(pendingTarget) !== key) return
+        if (!res.ok || res.data.kind !== 'token') return
+        anchor.classList.add(UNDERLINE_CLASS)
+      }
+
       // Replacing a card on the same anchor (e.g. a second match in one element):
       // tear the old one down so it can't dangle.
       if (card) {
@@ -153,8 +166,11 @@ export default defineContentScript({
         reset()
         activeAnchor = anchor
         document.documentElement.style.setProperty(UNDERLINE_VAR, ACCENT_BY_THEME[detectTheme()])
-        anchor.classList.add(UNDERLINE_CLASS)
         anchor.addEventListener('mouseleave', onAnchorLeave)
+        // Known-resolvable targets (addresses, whitelisted cashtags) underline immediately
+        // as the discoverability cue. A long-tail $symbol underlines only once the Worker
+        // confirms a single match (in showCard), so hovering slang never flashes a cue.
+        if (target.kind !== 'symbol') anchor.classList.add(UNDERLINE_CLASS)
       }
       pendingTarget = target
 
@@ -163,8 +179,10 @@ export default defineContentScript({
       }, HOVER_DELAY)
     }
 
-    // An EVM address (chain inferred from nearby text) or a whitelisted $CASHTAG. The
-    // 0x branch wins if both somehow appear — an address is the higher-signal match.
+    // An EVM address (chain inferred from nearby text) or a $CASHTAG. The 0x branch wins if
+    // both somehow appear — an address is the higher-signal match. A cashtag is a whitelisted
+    // coin (known coinId → shown immediately) or a long-tail symbol (resolved on demand, and
+    // only shown if the Worker finds a single confident match — see showCard).
     function detectTarget(text: string): Target | null {
       if (text.includes('0x')) {
         const addr = findAddress(text)
@@ -173,8 +191,12 @@ export default defineContentScript({
         }
       }
       if (text.includes('$')) {
-        const hit = findTicker(text)
-        if (hit) return { kind: 'coin', coinId: hit.coinId, symbol: hit.symbol }
+        const hit = findCashtag(text)
+        if (hit) {
+          return hit.coinId
+            ? { kind: 'coin', coinId: hit.coinId, symbol: hit.symbol }
+            : { kind: 'symbol', symbol: hit.symbol }
+        }
       }
       return null
     }

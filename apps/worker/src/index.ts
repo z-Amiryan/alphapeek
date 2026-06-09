@@ -12,6 +12,7 @@ import {
   fetchWalletPnl,
   normalizeToken,
   pickSafetyTarget,
+  resolveSymbolToCoinId,
 } from './coinstats'
 import { fetchDexToken } from './dexscreener'
 import { type Env, WORKER_VERSION } from './env'
@@ -22,9 +23,16 @@ const ADDRESS_RE = /^0x[a-f0-9]{40}$/
 // CoinStats coin-id slug (e.g. `pepe`, `pancakeswap-token`). Conservative — the ticker
 // path only ever sends ids from our own top-1000 whitelist, but validate defensively.
 const COIN_ID_RE = /^[a-z0-9][a-z0-9._-]{0,80}$/
+// A bare cashtag SYMBOL (uppercased), letter-led. The extension only sends long-tail
+// (non-whitelisted) symbols here; validate defensively against the resolution endpoint.
+const SYMBOL_RE = /^[A-Z][A-Z0-9]{1,10}$/
 
 // Kind-cache sentinel for addresses that are not token contracts.
 const NOT_A_TOKEN = 'addr:'
+// symid: cache sentinel for a cashtag SYMBOL with no confident single match — lets the
+// negative result be cached (the cache layer never stores null) so a slang $WORD doesn't
+// re-burn the ~5-credit symbol search on every hover.
+const NO_SYMBOL_MATCH = '-'
 
 const DAY = 60 * 60 * 24
 const KIND_TTL = 30 * DAY
@@ -41,6 +49,11 @@ const FEAR_GREED_TTL = 300
 // Short — DexScreener-sourced tokens are fresh/long-tail and move fast; still long enough
 // to collapse a viral burst on one address against DexScreener's per-IP rate limit.
 const DEX_TTL = 60
+// A symbol→coinId mapping is stable, and the search costs ~5 credits, so cache it (incl.
+// the NO_SYMBOL_MATCH negative) for a day. This bounds the long-tail cashtag path to at
+// most one symbol search per symbol per day — the price data still refreshes via the
+// short token:/chart: TTLs inside buildToken.
+const SYMBOL_ID_TTL = DAY
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -136,6 +149,38 @@ app.get('/v1/coin', async (c) => {
 
   try {
     const result = (await buildToken(c.env, coinId, 'derive')) ?? { kind: 'unknown' }
+    c.header('Cache-Control', 'public, max-age=60')
+    return c.json<LookupResult>(result)
+  } catch (err) {
+    if (err instanceof UpstreamError) {
+      return c.json<LookupError>({ error: 'upstream_error' }, 503)
+    }
+    throw err
+  }
+})
+
+// v0.2 — long-tail cashtag path. A $SYMBOL the extension couldn't resolve from its
+// top-1000 whitelist. We resolve it to a single canonical coin via `/coins?symbol=`
+// (single-match + market-cap guard — silent on the reused-ticker trap) and then reuse
+// the ticker card path. Coverage is EVM-only and CoinStats-indexed; fresh micro-caps
+// (largely Solana) stay `unknown` by design (see ROADMAP / SPEC §9).
+app.get('/v1/symbol', async (c) => {
+  const symbol = (c.req.query('symbol') ?? '').toUpperCase()
+  if (!SYMBOL_RE.test(symbol)) {
+    return c.json<LookupError>({ error: 'invalid_address' }, 400)
+  }
+
+  try {
+    const resolved = await cached(
+      c.env,
+      `symid:${symbol}`,
+      SYMBOL_ID_TTL,
+      async () => (await resolveSymbolToCoinId(c.env, symbol)) ?? NO_SYMBOL_MATCH,
+    )
+    const result: LookupResult =
+      resolved && resolved !== NO_SYMBOL_MATCH
+        ? ((await buildToken(c.env, resolved, 'derive')) ?? { kind: 'unknown' })
+        : { kind: 'unknown' }
     c.header('Cache-Control', 'public, max-age=60')
     return c.json<LookupResult>(result)
   } catch (err) {

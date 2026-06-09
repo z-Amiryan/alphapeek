@@ -6,6 +6,7 @@ import {
   normalizeWallet,
   normalizeWalletPnl,
   pickSafetyTarget,
+  pickSymbolMatch,
 } from '../src/coinstats'
 import { normalizeDexToken } from '../src/dexscreener'
 import { normalizeSafety } from '../src/goplus'
@@ -304,6 +305,75 @@ describe('pickSafetyTarget', () => {
     expect(pickSafetyTarget({})).toBeNull()
     expect(pickSafetyTarget({ contractAddresses: [] })).toBeNull()
     expect(pickSafetyTarget(null)).toBeNull()
+  })
+})
+
+describe('pickSymbolMatch', () => {
+  const evm = (id: string, marketCap: number, blockchain = 'ethereum') => ({
+    id,
+    symbol: 'FOO',
+    marketCap,
+    contractAddresses: [{ blockchain, contractAddress: '0xfoo' }],
+  })
+
+  it('resolves when exactly one supported-EVM coin clears the dust floor', () => {
+    const payload = {
+      result: [
+        evm('foo-token', 5_000_000, 'base'),
+        // dust below the floor → ignored, so the survivor is unique
+        evm('foo-scam', 4_000),
+      ],
+    }
+    expect(pickSymbolMatch(payload, 'FOO')).toBe('foo-token')
+  })
+
+  it('stays silent (null) when multiple real EVM coins share the ticker (the $MOON trap)', () => {
+    const payload = {
+      result: [evm('moon-a', 270_000, 'arbitrum-one'), evm('moon-b', 296_000, 'binance_smart')],
+    }
+    // Two contenders above the floor → never guess; the card stays silent.
+    expect(pickSymbolMatch(payload, 'FOO')).toBeNull()
+  })
+
+  it('ignores non-EVM (e.g. Solana) deployments — we can neither show nor scan them', () => {
+    const payload = {
+      result: [
+        {
+          id: 'sol-foo',
+          symbol: 'FOO',
+          marketCap: 9_000_000,
+          contractAddresses: [{ blockchain: 'solana', contractAddress: 'soL' }],
+        },
+      ],
+    }
+    expect(pickSymbolMatch(payload, 'FOO')).toBeNull()
+  })
+
+  it('matches the symbol case-insensitively and ignores fuzzy non-matches', () => {
+    const payload = {
+      result: [
+        {
+          id: 'foo-token',
+          symbol: 'foo',
+          marketCap: 5_000_000,
+          contractAddresses: [{ blockchain: 'ethereum', contractAddress: '0xfoo' }],
+        },
+        // a different ticker the upstream returned alongside → must not count
+        {
+          id: 'foobar',
+          symbol: 'FOOBAR',
+          marketCap: 9_000_000,
+          contractAddresses: [{ blockchain: 'base', contractAddress: '0xbar' }],
+        },
+      ],
+    }
+    expect(pickSymbolMatch(payload, 'FOO')).toBe('foo-token')
+  })
+
+  it('returns null when every match is below the floor or has no supported deployment', () => {
+    expect(pickSymbolMatch({ result: [evm('foo-dust', 1_000)] }, 'FOO')).toBeNull()
+    expect(pickSymbolMatch({ result: [] }, 'FOO')).toBeNull()
+    expect(pickSymbolMatch(null, 'FOO')).toBeNull()
   })
 })
 

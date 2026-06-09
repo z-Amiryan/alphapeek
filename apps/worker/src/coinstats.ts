@@ -256,6 +256,57 @@ export function pickSafetyTarget(detail: unknown): { chain: Chain; contract: str
   )
 }
 
+// Long-tail cashtag resolution. A $SYMBOL outside our top-1000 whitelist is genuinely
+// ambiguous — many coins reuse a ticker (e.g. ~19 distinct "MOON"s). Resolving to the
+// highest-cap match would routinely surface a confident WRONG token, which for a trust
+// tool is worse than no card. So this floor + single-match guard is the precision filter.
+const MIN_SYMBOL_MARKET_CAP_USD = 50_000
+
+function hasSupportedEvmDeployment(coin: Record<string, unknown>): boolean {
+  const entries = Array.isArray(coin.contractAddresses) ? coin.contractAddresses : []
+  for (const entry of entries) {
+    const er = asRecord(entry)
+    if (er && CHAIN_BY_COINS_SLUG[pickString(er, 'blockchain')]) return true
+  }
+  return false
+}
+
+// Picks the single canonical coinId for a bare cashtag SYMBOL from a `/coins?symbol=`
+// payload, or null. A candidate must (a) match the symbol exactly, (b) have a deployment
+// on a supported EVM chain (so we can show + safety-scan it), and (c) clear the dust
+// floor. Resolves ONLY when exactly one candidate survives — multiple contenders (the
+// reused-ticker trap) return null so the card stays silent rather than guess wrong.
+export function pickSymbolMatch(payload: unknown, symbol: string): string | null {
+  const coins = pickArray(payload, 'result', 'coins')
+  const want = symbol.toUpperCase()
+  const matches: string[] = []
+  for (const coin of coins) {
+    const rec = asRecord(coin)
+    if (!rec) continue
+    if (pickString(rec, 'symbol').toUpperCase() !== want) continue
+    if (pickNumber(rec, 'marketCap', 'marketCapUsd') < MIN_SYMBOL_MARKET_CAP_USD) continue
+    if (!hasSupportedEvmDeployment(rec)) continue
+    const id = pickString(rec, 'id', 'coinId')
+    if (id) matches.push(id)
+    if (matches.length > 1) return null // ambiguous — bail before reading the rest
+  }
+  return matches.length === 1 ? (matches[0] ?? null) : null
+}
+
+// Resolves a long-tail cashtag to a canonical coinId via `/coins?symbol=`, or null.
+// Sorted by rank asc (sortBy=marketCap is broken — pulls deep-rank coins forward), with
+// a generous page so the single-match guard sees every same-symbol contender. ~5 credits,
+// so the caller caches the result (incl. the negative) on a long TTL (see index.ts).
+export async function resolveSymbolToCoinId(env: Env, symbol: string): Promise<string | null> {
+  const payload = await cs(env, '/coins', {
+    symbol,
+    limit: '100',
+    sortBy: 'rank',
+    sortDir: 'asc',
+  })
+  return pickSymbolMatch(payload, symbol)
+}
+
 // Best-effort 7-day sparkline. Returns `null` on failure OR an empty result so the
 // cache layer (which never stores `null`) retries on the next request instead of
 // caching a blank chart — while a real chart gets cached on its own longer TTL.

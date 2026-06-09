@@ -57,6 +57,12 @@ function coinKeyOf(coinId: string): string {
   return `coin:${coinId.toLowerCase()}`
 }
 
+// Long-tail cashtags are keyed by the symbol (the coinId is resolved Worker-side). Same
+// prefix treatment as coin: so they stay out of the address-shaped recent list.
+function symbolKeyOf(symbol: string): string {
+  return `sym:${symbol.toUpperCase()}`
+}
+
 // Read + TTL-evict by key. Dropping expired entries on read keeps the cache bounded
 // and matches the privacy policy (no retention past TTL); we're about to hit the
 // network anyway, so the extra IndexedDB delete adds no perceptible latency.
@@ -99,6 +105,20 @@ export async function putCachedCoin(coinId: string, result: LookupResult): Promi
   await (await db()).put(STORE, entry)
 }
 
+export async function getCachedSymbol(symbol: string): Promise<LookupResult | null> {
+  return readEntry(symbolKeyOf(symbol))
+}
+
+export async function putCachedSymbol(symbol: string, result: LookupResult): Promise<void> {
+  const entry: CacheEntry = {
+    key: symbolKeyOf(symbol),
+    addr: symbol.toUpperCase(),
+    result,
+    ts: Date.now(),
+  }
+  await (await db()).put(STORE, entry)
+}
+
 // Newest-first; powers the popup's recent list. Ignores per-kind TTL, so prices
 // shown here may be staler than a fresh lookup.
 export async function recentLookups(limit = 5): Promise<CacheEntry[]> {
@@ -107,9 +127,10 @@ export async function recentLookups(limit = 5): Promise<CacheEntry[]> {
   const out: CacheEntry[] = []
   let cursor = await (await db()).transaction(STORE).store.index('by-ts').openCursor(null, 'prev')
   while (cursor && out.length < limit) {
-    // Coin ($TICKER) entries are keyed by coinId, not an address — keep them out of the
-    // address-shaped recent list.
-    if (!cursor.value.key.startsWith('coin:')) out.push(cursor.value)
+    // Coin/symbol (cashtag) entries are keyed by coinId or symbol, not an address — keep
+    // them out of the address-shaped recent list.
+    const k = cursor.value.key
+    if (!k.startsWith('coin:') && !k.startsWith('sym:')) out.push(cursor.value)
     cursor = await cursor.continue()
   }
   return out

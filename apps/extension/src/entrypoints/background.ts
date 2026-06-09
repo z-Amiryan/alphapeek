@@ -10,8 +10,15 @@ import type {
 } from '@alphapeek/shared'
 import { browser } from 'wxt/browser'
 import { debug, debugError } from '@/lib/debug'
-import { getCached, getCachedCoin, putCached, putCachedCoin } from '@/services/cache'
-import { coinLookup, fearGreed, lookup } from '@/services/worker-client'
+import {
+  getCached,
+  getCachedCoin,
+  getCachedSymbol,
+  putCached,
+  putCachedCoin,
+  putCachedSymbol,
+} from '@/services/cache'
+import { coinLookup, fearGreed, lookup, symbolLookup } from '@/services/worker-client'
 
 export default defineBackground(() => {
   browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -34,6 +41,8 @@ async function handle(
       return handleLookup(req.addr, req.chain)
     case 'COIN_LOOKUP':
       return handleCoinLookup(req.coinId)
+    case 'SYMBOL_LOOKUP':
+      return handleSymbolLookup(req.symbol)
     case 'FEAR_GREED':
       return fearGreed()
     default:
@@ -65,6 +74,22 @@ async function handleCoinLookup(coinId: string): Promise<RuntimeResponse<LookupR
   const res = await coinLookup(coinId)
   if (res.ok) {
     await putCachedCoin(coinId, res.data)
+  }
+  return res
+}
+
+async function handleSymbolLookup(symbol: string): Promise<RuntimeResponse<LookupResult>> {
+  const hit = await getCachedSymbol(symbol)
+  if (hit) {
+    debug('cache hit', 'symbol', symbol, hit.kind)
+    return { ok: true, data: hit }
+  }
+
+  // Caching the `unknown` result too (per the cache's per-kind TTL) means a hovered slang
+  // word doesn't re-hit the Worker — which mirrors the Worker's own negative cache.
+  const res = await symbolLookup(symbol)
+  if (res.ok) {
+    await putCachedSymbol(symbol, res.data)
   }
   return res
 }

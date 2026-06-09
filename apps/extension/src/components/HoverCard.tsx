@@ -4,7 +4,7 @@
 import { DEFAULT_CHAIN } from '@alphapeek/shared'
 import { autoUpdate, flip, offset, shift, useFloating } from '@floating-ui/react'
 import { useEffect, useId, useState } from 'react'
-import { requestCoinLookup, requestLookup } from '@/services/messaging'
+import { requestCoinLookup, requestLookup, requestSymbolLookup } from '@/services/messaging'
 import type { Target } from '@/shadow/mount'
 import { type LookupState, ResultView } from './ResultView'
 import { CARD } from './ui'
@@ -53,7 +53,9 @@ export function HoverCard({
     const lookup =
       target.kind === 'address'
         ? requestLookup(target.addr, target.chain)
-        : requestCoinLookup(target.coinId)
+        : target.kind === 'coin'
+          ? requestCoinLookup(target.coinId)
+          : requestSymbolLookup(target.symbol)
     lookup.then((res) => {
       if (!active) return
       setState(

@@ -72,12 +72,25 @@ Twitter. Built this cut (status below); breadth items deferred within v0.2.
   detection so a random `$WORD` never hits the Worker; lowest-rank-wins on collision keeps
   scam-symbol reuse out. A hit looks up via the new `GET /v1/coin?coinId=…`, which reuses the token
   card + chart + the GoPlus safety path (safety chain derived from the coin's `contractAddresses`,
-  preferring the canonical deployment). Composes on top of the DexScreener cut. **Known gap:** the
-  long tail of fresh micro-caps outside top-1000 still yields no cashtag card (see below). See SPEC §4/§5.
+  preferring the canonical deployment). Composes on top of the DexScreener cut. See SPEC §4/§5.
+- **$TICKER long-tail fallback (free, CoinStats-first).** A non-whitelisted `$SYMBOL` (≥3 chars)
+  now resolves via the new `GET /v1/symbol`, which searches `/coins?symbol=` and applies a strict
+  **single-match + $50k market-cap guard**: it shows a card only when a symbol has exactly one
+  supported-EVM coin above the floor, and stays **silent** on the reused-ticker trap (e.g. `$MOON`
+  → ~19 coins → no card) so it never renders a confident *wrong-token* card. The ~5-credit search
+  is negative-cached for a day (`symid:{SYMBOL}`), bounding it to one search per symbol per day —
+  and the hover **underline is deferred** until the Worker confirms a match, so slang never flashes
+  a cue. **Deliberately narrow:** EVM-only and CoinStats-indexed; the Solana majority of degen
+  cashtags + truly-fresh non-indexed micro-caps stay `unknown` (Solana → v0.3). See SPEC §4/§5/§9.
 
 **Deferred within v0.2 / later (still planned, not this cut):**
 - **Inline badge mode** (opt-in setting): tiny colored dot after each detected address, scanned on viewport entry. Hover-only stays as default for privacy/credit reasons.
-- **$TICKER long-tail fallback** (precision-sensitive): resolving a non-whitelisted `$SYMBOL` to a coin risks a confident *wrong-token* card (a degen's `$MOON` ≠ the top-mcap `$MOON`); a min-mcap floor hides low-caps but doesn't fix wrong-token. Evaluate as a precision/coverage trade, not a clean win.
+- **$TICKER long-tail — coverage extensions beyond the shipped EVM single-match cut.** The
+  built fallback (above) is EVM-only + CoinStats-indexed + single-match-guarded. Still open: the
+  **Solana** majority of degen cashtags (needs base58 detection + RugCheck safety → v0.3) and
+  fresh micro-caps not yet in CoinStats' index. A naive "resolve to the highest-mcap match" is
+  still explicitly rejected — it reintroduces the confident *wrong-token* card the single-match
+  guard exists to prevent.
 - **Lazy-load the hover card** so the content script drops back under the SPEC §7 25 KB budget (React + card are currently eager in the content entry; the $TICKER whitelist made the existing overage more visible).
 - **DeFi positions summary** ("$X across N protocols") — note: `GET /wallet/defi` is **400 credits/request** (4000 for `all`), so this is a paid-plan / credit-budget decision, not a free add.
 - **New sites:** Etherscan family (etherscan, basescan, arbiscan, bscscan, polygonscan, optimistic.etherscan, snowtrace), DEXScreener, GeckoTerminal

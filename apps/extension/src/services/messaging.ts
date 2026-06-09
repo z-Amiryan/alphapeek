@@ -24,6 +24,16 @@ export async function requestCoinLookup(coinId: string): Promise<LookupResponse>
   }
 }
 
+export async function requestSymbolLookup(symbol: string): Promise<LookupResponse> {
+  try {
+    const res = await browser.runtime.sendMessage({ type: 'SYMBOL_LOOKUP', symbol })
+    return res as LookupResponse
+  } catch (err) {
+    debugError('SYMBOL_LOOKUP message failed', err)
+    return { ok: false, error: 'upstream_error' }
+  }
+}
+
 export async function requestFearGreed(): Promise<FearGreedResponse> {
   try {
     const res = await browser.runtime.sendMessage({ type: 'FEAR_GREED' })

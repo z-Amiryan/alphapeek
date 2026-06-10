@@ -126,3 +126,83 @@ export async function fetchTokenSafety(
     return null
   }
 }
+
+// GoPlus-Solana encodes most authority capabilities as `{ authority: [...], status: "0"|"1" }`
+// (status "1" = the authority is still LIVE), and a few as bare "0"/"1" strings. Read either.
+function solStatus(v: unknown): boolean {
+  const rec = asRecord(v)
+  if (rec) return gpFlag(rec.status)
+  return gpFlag(v)
+}
+
+/**
+ * Maps a raw GoPlus-Solana `result[mint]` record to our verdict (v0.3). The Solana intuition
+ * INVERTS the EVM one: a legitimate SPL token *revokes* its mint + freeze authority, so an
+ * un-revoked one is a verdict-driving rug vector — not benign-common. CALIBRATED against a
+ * live trusted basket (WIF/JUP/POPCAT): all have mint/freeze/balance-mutable/closable status
+ * "0", so those are high-precision. `mutable_metadata` fires on trusted JUP, so it's an
+ * informational note (the lone EVM-style exception). Pure + exported for unit tests.
+ */
+export function normalizeSolanaSafety(raw: Record<string, unknown>): TokenSafety {
+  const flags: SafetyFlag[] = []
+  // Danger drivers: full control over supply or the ability to lock holders out.
+  if (solStatus(raw.mintable)) flags.push('mint_authority')
+  if (solStatus(raw.freezable)) flags.push('freeze_authority')
+  // A non-transferable token literally cannot be sold — the ultimate honeypot.
+  if (gpFlag(raw.non_transferable)) flags.push('honeypot')
+  // Owner can rewrite balances, or intercept every transfer via a custom hook (sell-block surface).
+  const transferHook = Array.isArray(raw.transfer_hook)
+    ? raw.transfer_hook.length > 0
+    : solStatus(raw.transfer_hook)
+  if (solStatus(raw.balance_mutable_authority) || transferHook) flags.push('owner_privileges')
+
+  // Informational: metadata can still be edited. Common on trusted tokens (JUP) → never scores.
+  const notes: SafetyFlag[] = []
+  if (solStatus(raw.metadata_mutable)) notes.push('mutable_metadata')
+
+  // mint/freeze authority or a hard non-transfer are certain rug power → danger; lesser
+  // capabilities → caution. SPL transfer fees are rare and GoPlus's fee shape is unverified,
+  // so taxes are reported as unknown (null) rather than risk a wrong number on the card.
+  const isDanger =
+    flags.includes('honeypot') ||
+    flags.includes('mint_authority') ||
+    flags.includes('freeze_authority')
+  const verdict = isDanger ? 'danger' : flags.length > 0 ? 'caution' : 'safe'
+
+  return { verdict, buyTaxPct: null, sellTaxPct: null, flags, notes, source: 'goplus' }
+}
+
+/**
+ * Best-effort GoPlus-Solana token-safety scan (v0.3). Same contract as fetchTokenSafety:
+ * NEVER throws — any failure returns null and the card renders without safety. Free + keyless,
+ * no CoinStats credit. The Solana endpoint takes the mint in a query param (no chain-id path
+ * segment), and the result is keyed by the mint VERBATIM — Solana base58 is case-sensitive, so
+ * (unlike the EVM path) the mint is not lowercased.
+ */
+export async function fetchSolanaTokenSafety(env: Env, mint: string): Promise<TokenSafety | null> {
+  const url = new URL(`${env.GOPLUS_BASE_URL}/solana/token_security`)
+  url.searchParams.set('contract_addresses', mint)
+
+  try {
+    const res = await fetch(url, {
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(SCAN_TIMEOUT_MS),
+    })
+    if (!res.ok) {
+      console.warn(`goplus solana scan failed for ${mint}: HTTP ${res.status}`)
+      return null
+    }
+    const payload = (await res.json()) as unknown
+    const byMint = asRecord(asRecord(payload)?.result)
+    if (!byMint) return null
+    // Prefer the exact-mint key; if GoPlus returned a single row under a differing key, use it.
+    const keys = Object.keys(byMint)
+    const row =
+      asRecord(byMint[mint]) ?? (keys.length === 1 ? asRecord(byMint[keys[0] ?? '']) : null)
+    if (!row) return null
+    return normalizeSolanaSafety(row)
+  } catch (cause) {
+    console.warn(`goplus solana scan errored for ${mint}: ${String(cause)}`)
+    return null
+  }
+}

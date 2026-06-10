@@ -147,7 +147,11 @@ export function normalizeSolanaSafety(raw: Record<string, unknown>): TokenSafety
   const flags: SafetyFlag[] = []
   // Danger drivers: full control over supply or the ability to lock holders out.
   if (solStatus(raw.mintable)) flags.push('mint_authority')
-  if (solStatus(raw.freezable)) flags.push('freeze_authority')
+  // Freeze authority, OR Token-2022 frozen-by-default (`default_account_state === 2`) — new
+  // holders' accounts start frozen until the authority thaws them, a sell-block honeypot vector.
+  if (solStatus(raw.freezable) || gpNumber(raw.default_account_state) === 2) {
+    flags.push('freeze_authority')
+  }
   // A non-transferable token literally cannot be sold — the ultimate honeypot.
   if (gpFlag(raw.non_transferable)) flags.push('honeypot')
   // Owner can rewrite balances, or intercept every transfer via a custom hook (sell-block surface).

@@ -114,8 +114,10 @@ export function TokenView({ token, chain, addr }: Props) {
           // No CoinStats coin page for an unindexed token — link straight to the DexScreener
           // pair (its authoritative chain), falling back to a chain/mint URL if absent.
           <a
+            // `||` not `??`: normalizeDex*Token sets url to '' when absent, and an empty
+            // string must fall back to a constructed URL, not render a dead link.
             href={
-              token.url ?? (solMint ? dexScreenerSolanaUrl(solMint) : dexScreenerUrl(chain, addr))
+              token.url || (solMint ? dexScreenerSolanaUrl(solMint) : dexScreenerUrl(chain, addr))
             }
             target="_blank"
             rel="noopener noreferrer"

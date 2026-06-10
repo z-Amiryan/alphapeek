@@ -270,18 +270,24 @@ export function pickSafetyTarget(detail: unknown): SafetyTarget | null {
     if (chain && contract) candidates.push({ chain, contract })
     else if (slug === 'solana' && contract && !solMint) solMint = contract
   }
-  if (candidates.length === 0) {
-    return solMint ? { network: 'solana', mint: solMint } : null
-  }
   const canonical = pickString(coin, 'contractAddress').toLowerCase()
-  return (
+  // Canonical-first across BOTH ecosystems. CoinStats sets the top-level `contractAddress`
+  // to the coin's canonical deployment (verified live: dogwifcoin's is its Solana mint). So a
+  // Solana-canonical coin scans Solana even when it ALSO has an EVM bridge — its `$cashtag`
+  // verdict then matches its mint-hover verdict, and a bridge contract's admin keys can't raise
+  // a false "Caution" on a legit Solana coin. Otherwise EVM-first (GoPlus-EVM is calibrated, and
+  // a multichain coin's EVM deployment is the safer scan), then any Solana deployment.
+  if (solMint && canonical && solMint.toLowerCase() === canonical) {
+    return { network: 'solana', mint: solMint }
+  }
+  const evm =
     candidates.find((c) => c.contract.toLowerCase() === canonical) ??
     candidates.find((c) => c.chain === 'ethereum') ??
     [...candidates].sort(
       (a, b) => SUPPORTED_CHAINS.indexOf(a.chain) - SUPPORTED_CHAINS.indexOf(b.chain),
-    )[0] ??
-    null
-  )
+    )[0]
+  if (evm) return evm
+  return solMint ? { network: 'solana', mint: solMint } : null
 }
 
 // Long-tail cashtag resolution. A $SYMBOL outside our top-1000 whitelist is genuinely

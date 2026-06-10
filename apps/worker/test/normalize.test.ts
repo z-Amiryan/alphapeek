@@ -297,6 +297,22 @@ describe('pickSafetyTarget', () => {
     ).toEqual({ chain: 'base', contract: '0xb' })
   })
 
+  it('scans Solana for a Solana-canonical coin even when it also has an EVM bridge (v0.3)', () => {
+    // CoinStats sets the top-level contractAddress to the canonical deployment (a Solana mint
+    // for BONK-class coins). The cashtag verdict must then match the mint-hover verdict, so a
+    // bridge's admin keys can't raise a false "Caution". Solana wins over the EVM bridge here.
+    const mint = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263'
+    expect(
+      pickSafetyTarget({
+        contractAddress: mint,
+        contractAddresses: [
+          { blockchain: 'solana', contractAddress: mint },
+          { blockchain: 'ethereum', contractAddress: '0xbridge0000000000000000000000000000000000' },
+        ],
+      }),
+    ).toEqual({ network: 'solana', mint })
+  })
+
   it('falls back to a Solana mint when no supported-EVM deployment exists (v0.3)', () => {
     // EVM-first still holds (the CAKE case above), but a Solana-only coin now yields a
     // Solana safety target instead of null, so $GOAT-class cashtags can be scanned.
@@ -477,6 +493,14 @@ describe('normalizeSolanaSafety', () => {
 
   it('treats a non-transferable token as a honeypot (danger)', () => {
     expect(normalizeSolanaSafety({ ...clean, non_transferable: '1' }).verdict).toBe('danger')
+  })
+
+  it('treats Token-2022 frozen-by-default (default_account_state "2") as freeze danger', () => {
+    const s = normalizeSolanaSafety({ ...clean, default_account_state: '2' })
+    expect(s.verdict).toBe('danger')
+    expect(s.flags).toContain('freeze_authority')
+    // A normal initialized state ("1", as on WIF) must NOT trip it.
+    expect(normalizeSolanaSafety({ ...clean, default_account_state: '1' }).verdict).toBe('safe')
   })
 
   it('cautions on lesser owner privileges (balance-mutable or transfer hook)', () => {

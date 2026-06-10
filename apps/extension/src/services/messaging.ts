@@ -34,6 +34,16 @@ export async function requestSymbolLookup(symbol: string): Promise<LookupRespons
   }
 }
 
+export async function requestSolLookup(mint: string): Promise<LookupResponse> {
+  try {
+    const res = await browser.runtime.sendMessage({ type: 'SOL_LOOKUP', mint })
+    return res as LookupResponse
+  } catch (err) {
+    debugError('SOL_LOOKUP message failed', err)
+    return { ok: false, error: 'upstream_error' }
+  }
+}
+
 export async function requestFearGreed(): Promise<FearGreedResponse> {
   try {
     const res = await browser.runtime.sendMessage({ type: 'FEAR_GREED' })

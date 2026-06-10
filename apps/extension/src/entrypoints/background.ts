@@ -13,12 +13,14 @@ import { debug, debugError } from '@/lib/debug'
 import {
   getCached,
   getCachedCoin,
+  getCachedSol,
   getCachedSymbol,
   putCached,
   putCachedCoin,
+  putCachedSol,
   putCachedSymbol,
 } from '@/services/cache'
-import { coinLookup, fearGreed, lookup, symbolLookup } from '@/services/worker-client'
+import { coinLookup, fearGreed, lookup, solLookup, symbolLookup } from '@/services/worker-client'
 
 export default defineBackground(() => {
   browser.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -43,6 +45,8 @@ async function handle(
       return handleCoinLookup(req.coinId)
     case 'SYMBOL_LOOKUP':
       return handleSymbolLookup(req.symbol)
+    case 'SOL_LOOKUP':
+      return handleSolLookup(req.mint)
     case 'FEAR_GREED':
       return fearGreed()
     default:
@@ -90,6 +94,22 @@ async function handleSymbolLookup(symbol: string): Promise<RuntimeResponse<Looku
   const res = await symbolLookup(symbol)
   if (res.ok) {
     await putCachedSymbol(symbol, res.data)
+  }
+  return res
+}
+
+async function handleSolLookup(mint: string): Promise<RuntimeResponse<LookupResult>> {
+  const hit = await getCachedSol(mint)
+  if (hit) {
+    debug('cache hit', 'sol', mint, hit.kind)
+    return { ok: true, data: hit }
+  }
+
+  // Like the symbol path, the `unknown` result is cached (per-kind TTL) so a base58 false
+  // positive that the pre-flight rejected doesn't re-hit the Worker on a repeat hover.
+  const res = await solLookup(mint)
+  if (res.ok) {
+    await putCachedSol(mint, res.data)
   }
   return res
 }

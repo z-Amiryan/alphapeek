@@ -219,6 +219,13 @@ export type SymbolLookupRequest = {
   symbol: string
 }
 
+// v0.3 — Solana token (mint) path. A detected/pasted base58 mint. Resolved Worker-side via
+// `/v1/sol`; the extension pre-flights it before showing anything (base58 false positives).
+export type SolLookupRequest = {
+  type: 'SOL_LOOKUP'
+  mint: string
+}
+
 export type FearGreedRequest = {
   type: 'FEAR_GREED'
 }
@@ -227,6 +234,7 @@ export type RuntimeRequest =
   | LookupRequest
   | CoinLookupRequest
   | SymbolLookupRequest
+  | SolLookupRequest
   | FearGreedRequest
 
 // Discriminated envelope: errors surface as `{ ok: false }` rather than throwing

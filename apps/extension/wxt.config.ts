@@ -19,9 +19,9 @@ export default defineConfig({
       description:
         'Hover any wallet, token or $cashtag on X (Twitter) — balances, PnL, price, 7-day charts, and a contract-safety check, instantly.',
       // Chrome's manifest `version` must be numeric; `version_name` carries the
-      // human-readable beta label (the v0.2 safety/PnL cut shipped; breadth deferred).
-      version: '0.2.0',
-      version_name: '0.2.0-beta',
+      // human-readable beta label (v0.3 = the Solana-token cut; Solana wallets deferred).
+      version: '0.3.0',
+      version_name: '0.3.0-beta',
       permissions: ['storage'],
       host_permissions: ['https://x.com/*', 'https://twitter.com/*'],
       action: { default_popup: 'popup.html' },

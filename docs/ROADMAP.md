@@ -109,18 +109,35 @@ Twitter. Built this cut (status below); breadth items deferred within v0.2.
     add. Treat as its own effort. **Solana** (see v0.3) is the highest-value non-EVM target for Crypto Twitter.
 - **Public Chrome Web Store listing** (out of beta)
 
-## v0.3 — Stickiness
+## v0.3 — Solana + Stickiness (CURRENT)
 
-**Goal:** Turn one-shot users into daily users.
+**Goal:** Close the #1 beta-churn gap (Crypto-Twitter cashtag culture is majority Solana, and an
+EVM-only tool renders nothing on half the cashtags), then turn one-shot users into daily users.
 
-**Added scope:**
+**This cut (built) — Solana tokens:**
+- **Solana token mints.** A pasted/detected base58 mint resolves to a token card via the new
+  `GET /v1/sol?mint=` (CoinStats-first → DexScreener-Solana fallback → unknown). Detection reuses
+  the long-tail **pre-flight + deferred-underline** trust gate, so base58 false positives never
+  show a card. Verified live: BONK/GOAT/WIF mints resolve.
+- **Solana token cashtags.** Whitelisted top-1000 Solana coins ($WIF/$BONK/$JUP) already resolved
+  via `/v1/coin`; the long-tail guard (`pickSymbolMatch`) is widened to accept a single Solana
+  deployment under the **same single-match + $50k-floor** discipline (a contested ticker like
+  `$GOAT` stays silent by design).
+- **Solana contract safety — GoPlus-Solana** (reuses the GoPlus provider, `source:'goplus'` — no
+  new third party, no new privacy disclosure). The EVM calibration inverts on Solana: an un-revoked
+  mint/freeze authority is verdict-driving danger. Calibrated live against WIF/JUP/POPCAT/BONK.
+- **Explicitly deferred to a follow-up cut: Solana wallet balances / PnL.** A base58 *wallet*
+  address needs a separate CoinStats wallet path (or a Solana RPC); cashtag culture is
+  token-centric, so wallets are lower-value/higher-effort. Non-EVM, non-Solana chains (Tron, etc.)
+  also stay out — each needs its own detection model.
+
+**Added scope (stickiness — still planned):**
 - **Watchlist** — star a wallet from any hover card, view list in popup
 - **Background polling** — `chrome.alarms` checks watchlist every 15 minutes, push notification on significant changes
 - **Price alerts** — set a threshold on any coin, get notified
 - **Optional account** — sign in to sync watchlist across devices (Anthropic-style: optional, not required)
 - **BYO API key power mode** — settings toggle, user pastes their own CoinStats key, bypasses the proxy
 - **Telegram Web** + **Discord Web** + **Farcaster / Warpcast** site support
-- **Solana** support (different address regex, different chain handling)
 
 ## v1.0 — Full crypto-browsing companion
 

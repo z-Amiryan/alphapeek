@@ -37,9 +37,9 @@ AlphaPeek shows wallet, token, and cashtag info — including a contract-safety 
 ## Detailed description (paste as-is; keywords woven in naturally)
 
 ```
-AlphaPeek turns every EVM wallet address, token contract, and $cashtag on X
-(Twitter) into a hoverable info card. No clicking away, no copy-pasting into a block
-explorer — just point and peek.
+AlphaPeek turns every EVM wallet address, token contract, Solana token, and $cashtag
+on X (Twitter) into a hoverable info card. No clicking away, no copy-pasting into a
+block explorer — just point and peek.
 
 ── WHAT YOU SEE ──
 
@@ -50,6 +50,10 @@ explorer — just point and peek.
   market cap, volume, 7-day sparkline) PLUS a free contract-safety check: a
   safe / caution / risk verdict with buy & sell tax and risk findings like honeypot,
   mintable supply, and owner privileges — so you can spot a rug before you ape.
+
+• Hover a Solana token → paste or hover a Solana mint, or a Solana $cashtag like
+  $WIF or $BONK, for the same card plus a Solana contract-safety check (mint &
+  freeze authority, transfer controls) — linking out to Solscan.
 
 • Open the toolbar popup → the live Fear & Greed market-mood index, a quick
   address lookup box, and your recent peeks.
@@ -70,10 +74,11 @@ explorer — just point and peek.
 
 ── HOW IT WORKS ──
 
-AlphaPeek detects EVM wallet and contract addresses (0x…) and cashtags ($PEPE) in
-tweets and fetches read-only market data through a lightweight proxy. It works on
-x.com and twitter.com. Crypto data is powered by CoinStats, contract-safety checks
-by GoPlus, with DexScreener filling in fresh tokens.
+AlphaPeek detects EVM wallet and contract addresses (0x…), Solana token mints, and
+cashtags ($PEPE, $WIF) in tweets and fetches read-only market data through a
+lightweight proxy. It works on x.com and twitter.com. Crypto data is powered by
+CoinStats, contract-safety checks by GoPlus (EVM and Solana), with DexScreener
+filling in fresh tokens. Solana wallet balances are not yet supported.
 
 ── GOOD TO KNOW ──
 
@@ -90,7 +95,7 @@ keyword list anywhere — a standalone list triggers the "keyword stuffing" reje
 (Yellow Argon — see [troubleshooting](https://developer.chrome.com/docs/webstore/troubleshooting/#keyword-stuffing)).
 
 To stay discoverable, make sure these terms appear **naturally in the prose above**
-(they already do): crypto wallet · EVM · token price · contract address · cashtag ·
+(they already do): crypto wallet · EVM · Solana · token price · contract address · cashtag ·
 contract safety · honeypot · token tax · wallet PnL · balance · holdings · 7-day chart ·
 market cap · Fear & Greed · X / Twitter · on-chain.
 

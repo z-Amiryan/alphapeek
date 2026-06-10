@@ -16,7 +16,7 @@
 
 ---
 
-**AlphaPeek** is an open-source Chrome extension (Manifest V3) for **X / Twitter**. It detects **EVM wallet and token addresses** in the timeline and, when you hover one, shows a compact info card — a wallet's **balance, top holdings, and allocation**, or a token's **price, market cap, volume, and 7-day chart** — without ever leaving the page. No login, no wallet connection, no setup. Crypto data is powered by the [CoinStats Public API](https://coinstats.app/api-docs/).
+**AlphaPeek** is an open-source Chrome extension (Manifest V3) for **X / Twitter**. It detects **EVM wallet and token addresses, Solana token mints, and `$cashtags`** in the timeline and, when you hover one, shows a compact info card — a wallet's **balance, top holdings, and allocation**, or a token's **price, market cap, volume, and 7-day chart** — without ever leaving the page. No login, no wallet connection, no setup. Crypto data is powered by the [CoinStats Public API](https://coinstats.app/api-docs/).
 
 > **Why it exists:** addresses fly past on Crypto Twitter constantly, and checking each one means copy-pasting into a block explorer. AlphaPeek turns that into a hover.
 
@@ -24,10 +24,11 @@
 
 - **Hover a wallet** → total USD balance, top 5 holdings, an allocation bar, a **stablecoin %** ("risk-on vs parked") signal, and **all-time PnL**.
 - **Hover a token contract _or a `$cashtag`_** → symbol, price, 24h change, market cap, 24h volume, a **7-day sparkline**, a free **contract-safety verdict** (GoPlus: safe / caution / risk, plus buy/sell tax and risk findings), and soft market-data flags (`low-liquidity` / `high-volatility`). Cashtags resolve via a top-1000 whitelist, with a single-match-guarded long-tail fallback.
-- **Coverage fallback** → when CoinStats hasn't indexed a token yet, AlphaPeek falls through to **DexScreener** (free) so fresh / long-tail / wrong-chain EVM tokens still render a card.
+- **Hover a Solana token** → paste/hover a base58 **mint**, or a Solana `$cashtag` ($WIF, $BONK, $JUP) → the same token card + a **GoPlus-Solana** safety verdict (mint/freeze-authority aware), linking to **Solscan**. Base58 detection is pre-flighted, so a random base58 string never shows a card.
+- **Coverage fallback** → when CoinStats hasn't indexed a token yet, AlphaPeek falls through to **DexScreener** (free) so fresh / long-tail / wrong-chain tokens (EVM **and Solana**) still render a card.
 - **Click any holding** → opens its CoinStats coin page (`coinstats.app/coins/{coin}`).
 - **Toolbar popup** → live **Fear & Greed** index, a manual address lookup, your recent lookups, and a default-chain setting.
-- **7 EVM chains:** Ethereum, BNB Chain, Polygon, Base, Arbitrum, Optimism, Avalanche. Chain is inferred from surrounding tweet text, falling back to your default.
+- **7 EVM chains + Solana:** Ethereum, BNB Chain, Polygon, Base, Arbitrum, Optimism, Avalanche (EVM chain inferred from surrounding tweet text), plus **Solana** tokens. Solana **wallets** are not yet supported.
 - **Fast & private:** results are cached locally (IndexedDB), the card renders in an isolated Shadow DOM, and there is **no login, no account, and no tracking of any kind**.
 
 ## How it works
@@ -43,7 +44,7 @@
    X / Twitter timeline
 ```
 
-1. A content script watches for `mouseover` on the timeline and matches EVM addresses (`0x…40 hex`) in text.
+1. A content script watches for `mouseover` on the timeline and matches EVM addresses (`0x…40 hex`), `$cashtags`, and Solana mints (`32–44 base58`) in text. Low-precision matches (long-tail cashtags, base58 mints) are **pre-flighted** against the Worker and only shown once confirmed.
 2. After a 200 ms hover delay, the **background service worker** checks its IndexedDB cache, then calls the Worker on a miss.
 3. The **Cloudflare Worker** is the only component that holds the CoinStats API key. It detects whether the address is a token contract or a wallet, fetches the data, normalizes CoinStats' field quirks, caches it in KV, and returns a typed result.
 4. The extension renders the card in a Shadow DOM so AlphaPeek's styles never leak into — or inherit from — X's page.
@@ -116,11 +117,11 @@ curl "http://localhost:8787/v1/lookup?chain=ethereum&addr=0x95ad61b0a150d79219dc
 
 ## Status & limitations
 
-Pre-release: the v0.1 core plus the v0.2 cut (safety, PnL, coverage, cashtags). Deliberately scoped (full list in [`docs/ROADMAP.md`](docs/ROADMAP.md)):
+Pre-release: the v0.1 core, the v0.2 cut (safety, PnL, coverage, cashtags), and the v0.3 Solana-token cut. Deliberately scoped (full list in [`docs/ROADMAP.md`](docs/ROADMAP.md)):
 
-- **EVM only**, **X / Twitter only** — more chains (incl. Solana) and sites in v0.3+.
-- **Trending/established-token inspector, not a launch-sniper.** CoinStats indexes new tokens within a few hours; the v0.2 **DexScreener fallback** now rescues fresh/long-tail/wrong-chain EVM tokens, but a brand-new contract with no liquidity can still read `unknown`.
-- **Shipped in v0.2:** contract-safety verdict (GoPlus), all-time wallet PnL, the DexScreener coverage fallback, and `$TICKER` cashtag detection (a top-1000 whitelist plus a single-match-guarded long-tail fallback). **Still ahead:** Solana, a persistent watchlist, alerts — see the roadmap.
+- **EVM + Solana tokens**, **X / Twitter only** — Solana **wallets** and more sites in later cuts.
+- **Trending/established-token inspector, not a launch-sniper.** CoinStats indexes new tokens within a few hours; the **DexScreener fallback** (EVM and Solana) now rescues fresh/long-tail/wrong-chain tokens, but a brand-new contract with no liquidity can still read `unknown`.
+- **Shipped in v0.2:** contract-safety verdict (GoPlus), all-time wallet PnL, the DexScreener coverage fallback, and `$TICKER` cashtag detection. **Shipped in v0.3:** Solana token mints + cashtags (`/v1/sol`, base58 pre-flight) with **GoPlus-Solana** safety. **Still ahead:** Solana wallets, a persistent watchlist, alerts — see the roadmap.
 - Chain inference from tweet text is best-effort (X has no URL context).
 
 ## For humans

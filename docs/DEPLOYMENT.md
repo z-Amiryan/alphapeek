@@ -1,4 +1,4 @@
-# DEPLOYMENT.md — Runbook for v0.1 Launch
+# DEPLOYMENT.md — Runbook for Launch (v0.2)
 
 > **Agent rule:** Anything in this doc marked **🚨 ASK USER** must be confirmed before executing.
 

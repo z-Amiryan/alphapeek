@@ -17,7 +17,7 @@ export default defineConfig({
     return {
       name: 'AlphaPeek',
       description:
-        'Peek any wallet or token on X (Twitter) — see balances, top holdings, price and 7-day charts instantly on hover.',
+        'Hover any wallet, token or $cashtag on X (Twitter) — balances, PnL, price, 7-day charts, and a contract-safety check, instantly.',
       // Chrome's manifest `version` must be numeric; `version_name` carries the
       // human-readable beta label (the v0.2 safety/PnL cut shipped; breadth deferred).
       version: '0.2.0',

@@ -83,7 +83,13 @@ up and red for down — **not** the conventional green; this is intentional bran
 
 A blinking caret (`ap-blink`, gated behind `motion-safe`), centered — no spinner. Card height ~60px during loading; it grows in place when data arrives.
 
-### B. Token card (contract address)
+### B. Token card (contract address or $cashtag)
+
+> **$TICKER cashtags (v0.2)** render this exact card. A whitelisted cashtag (top-1000) shows
+> instantly like a contract; a long-tail `$symbol` is **pre-flighted** through the Worker first and
+> shown only if it resolves to a single confident token — so the discoverability underline is
+> *deferred* until confirmation and slang words never flash a cue or a "No Data" card. Cashtag cards
+> have no hovered contract, so the footer shows the CoinStats link only (no DEX link).
 
 ```
 ┌────────────────────────────────────┐

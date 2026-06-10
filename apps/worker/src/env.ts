@@ -7,8 +7,12 @@ export type Env = {
   COINSTATS_BASE_URL: string
   // GoPlus token-security base (free, keyless public API). A plain var, not a secret.
   GOPLUS_BASE_URL: string
+  // DexScreener base (free, keyless public API). Zero-credit token-coverage fallback
+  // for addresses CoinStats can't resolve. A plain var, not a secret.
+  DEXSCREENER_BASE_URL: string
   COINSTATS_API_KEY: string
 }
 
-// Surfaced at /health; bump on each deploy (DEPLOYMENT.md §7). v2026.06.08 = v0.2.
-export const WORKER_VERSION = 'v2026.06.08'
+// Surfaced at /health; bump on each deploy (DEPLOYMENT.md §7). v2026.06.09 = v0.2 +
+// DexScreener fallback, $TICKER (/v1/coin) + long-tail (/v1/symbol), short NOT_A_TOKEN TTL.
+export const WORKER_VERSION = 'v2026.06.09'

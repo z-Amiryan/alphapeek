@@ -74,6 +74,14 @@ export type TokenSafety = {
   source: 'goplus'
 }
 
+/**
+ * Where a token card's market data came from. `coinstats` is the default path;
+ * `dexscreener` is the free zero-credit fallback used only when CoinStats has no
+ * data for the address (fresh / long-tail / wrong-chain-inferred tokens). The UI
+ * branches its primary link on this (CoinStats coin page vs the DexScreener pair).
+ */
+export type TokenSource = 'coinstats' | 'dexscreener'
+
 export type TokenSummary = {
   coinId: string
   name: string
@@ -93,6 +101,10 @@ export type TokenSummary = {
    * the card renders fully without it.
    */
   safety?: TokenSafety
+  /** Data provider for this card (see TokenSource). Defaults to 'coinstats'. */
+  source: TokenSource
+  /** External page for the token (the DexScreener pair URL when source='dexscreener'). */
+  url?: string
 }
 
 export type Holding = {
@@ -173,11 +185,31 @@ export type LookupRequest = {
   chain: Chain
 }
 
+// v0.2 — $TICKER (cashtag) path. A cashtag resolves to a CoinStats coinId via the
+// extension's preloaded top-1000 whitelist; the Worker derives the safety chain from
+// the coin's contractAddresses, so no chain is sent.
+export type CoinLookupRequest = {
+  type: 'COIN_LOOKUP'
+  coinId: string
+}
+
+// v0.2 — long-tail cashtag path. A $SYMBOL that is NOT in the top-1000 whitelist; the
+// Worker resolves it to a single canonical coin via `/coins?symbol=` under a strict
+// single-match + market-cap guard (silent on ambiguity — never a wrong-token card).
+export type SymbolLookupRequest = {
+  type: 'SYMBOL_LOOKUP'
+  symbol: string
+}
+
 export type FearGreedRequest = {
   type: 'FEAR_GREED'
 }
 
-export type RuntimeRequest = LookupRequest | FearGreedRequest
+export type RuntimeRequest =
+  | LookupRequest
+  | CoinLookupRequest
+  | SymbolLookupRequest
+  | FearGreedRequest
 
 // Discriminated envelope: errors surface as `{ ok: false }` rather than throwing
 // across the message boundary, so callers branch on `ok` before touching `data`.

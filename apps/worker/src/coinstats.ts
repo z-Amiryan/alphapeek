@@ -1,10 +1,11 @@
-import type {
-  Chain,
-  Holding,
-  TokenFlag,
-  TokenSummary,
-  WalletPnl,
-  WalletSummary,
+import {
+  type Chain,
+  type Holding,
+  SUPPORTED_CHAINS,
+  type TokenFlag,
+  type TokenSummary,
+  type WalletPnl,
+  type WalletSummary,
 } from '@alphapeek/shared'
 import type { Env } from './env'
 
@@ -39,7 +40,7 @@ const STABLECOINS: ReadonlySet<string> = new Set([
 const LOW_LIQUIDITY_VOLUME_USD = 50_000
 const HIGH_VOLATILITY_ABS_PCT = 25
 
-function deriveTokenFlags(volume: number, pCh24h: number): TokenFlag[] {
+export function deriveTokenFlags(volume: number, pCh24h: number): TokenFlag[] {
   const flags: TokenFlag[] = []
   // Thin 24h volume → hard to exit without slippage. volume === 0 means missing data, not zero.
   if (volume > 0 && volume < LOW_LIQUIDITY_VOLUME_USD) flags.push('low_liquidity')
@@ -85,6 +86,13 @@ const WALLET_CHAIN: Record<Chain, string> = {
   optimism: 'optimism-wallet',
   avalanche: 'avalanche-wallet',
 }
+
+// Inverse of COINS_CHAIN. A coin's contractAddresses[].blockchain uses the SAME slug
+// namespace as `/coins?blockchains=` (verified live 2026-06-09), so each slug maps
+// straight back to one of our Chains. Derived from COINS_CHAIN so the two can't drift.
+const CHAIN_BY_COINS_SLUG: Record<string, Chain> = Object.fromEntries(
+  SUPPORTED_CHAINS.map((c): [string, Chain] => [COINS_CHAIN[c], c]),
+)
 
 // The ONLY place X-API-KEY is attached. Never leak the key past this boundary.
 async function cs(env: Env, path: string, params: Record<string, string>): Promise<unknown> {
@@ -189,6 +197,7 @@ export function normalizeToken(
     volume,
     sparkline: chartPoints,
     flags: deriveTokenFlags(volume, pCh24h),
+    source: 'coinstats',
   }
 }
 
@@ -209,12 +218,93 @@ export function normalizeChart(payload: unknown): number[] {
   return out
 }
 
-// Token detail WITHOUT the chart — the sparkline is fetched and cached separately
-// (see fetchChart + index.ts) so a flaky chart call can't pin an empty sparkline on
-// the whole token entry for the token TTL.
-export async function fetchTokenDetail(env: Env, coinId: string): Promise<TokenSummary> {
-  const details = await cs(env, `/coins/${encodeURIComponent(coinId)}`, {})
-  return normalizeToken(coinId, details, [])
+// Raw `/coins/{id}` payload, returned un-normalized so a single fetch feeds BOTH
+// normalizeToken and pickSafetyTarget — the ticker path needs contractAddresses to
+// derive a GoPlus scan target without a second call. The chart is fetched + cached
+// separately (see fetchChart + buildToken) so a flaky chart can't pin a blank sparkline.
+export async function fetchCoinDetailRaw(env: Env, coinId: string): Promise<unknown> {
+  return cs(env, `/coins/${encodeURIComponent(coinId)}`, {})
+}
+
+// Derives the (chain, contract) to scan with GoPlus from a coin's contractAddresses —
+// the ticker path has no hovered address. Prefers the canonical singular
+// `contractAddress` deployment (verified: CAKE's single is its BSC-native entry, not the
+// ETH bridge), then ethereum, then SUPPORTED_CHAINS order. Returns null when no
+// deployment is on a supported chain (e.g. a Solana-native coin) → safety stays absent.
+export function pickSafetyTarget(detail: unknown): { chain: Chain; contract: string } | null {
+  const rec = asRecord(detail)
+  const coin = asRecord(rec?.coin) ?? asRecord(rec?.result) ?? rec
+  if (!coin) return null
+  const entries = Array.isArray(coin.contractAddresses) ? coin.contractAddresses : []
+  const candidates: { chain: Chain; contract: string }[] = []
+  for (const entry of entries) {
+    const er = asRecord(entry)
+    if (!er) continue
+    const chain = CHAIN_BY_COINS_SLUG[pickString(er, 'blockchain')]
+    const contract = pickString(er, 'contractAddress')
+    if (chain && contract) candidates.push({ chain, contract })
+  }
+  if (candidates.length === 0) return null
+  const canonical = pickString(coin, 'contractAddress').toLowerCase()
+  return (
+    candidates.find((c) => c.contract.toLowerCase() === canonical) ??
+    candidates.find((c) => c.chain === 'ethereum') ??
+    [...candidates].sort(
+      (a, b) => SUPPORTED_CHAINS.indexOf(a.chain) - SUPPORTED_CHAINS.indexOf(b.chain),
+    )[0] ??
+    null
+  )
+}
+
+// Long-tail cashtag resolution. A $SYMBOL outside our top-1000 whitelist is genuinely
+// ambiguous — many coins reuse a ticker (e.g. ~19 distinct "MOON"s). Resolving to the
+// highest-cap match would routinely surface a confident WRONG token, which for a trust
+// tool is worse than no card. So this floor + single-match guard is the precision filter.
+const MIN_SYMBOL_MARKET_CAP_USD = 50_000
+
+function hasSupportedEvmDeployment(coin: Record<string, unknown>): boolean {
+  const entries = Array.isArray(coin.contractAddresses) ? coin.contractAddresses : []
+  for (const entry of entries) {
+    const er = asRecord(entry)
+    if (er && CHAIN_BY_COINS_SLUG[pickString(er, 'blockchain')]) return true
+  }
+  return false
+}
+
+// Picks the single canonical coinId for a bare cashtag SYMBOL from a `/coins?symbol=`
+// payload, or null. A candidate must (a) match the symbol exactly, (b) have a deployment
+// on a supported EVM chain (so we can show + safety-scan it), and (c) clear the dust
+// floor. Resolves ONLY when exactly one candidate survives — multiple contenders (the
+// reused-ticker trap) return null so the card stays silent rather than guess wrong.
+export function pickSymbolMatch(payload: unknown, symbol: string): string | null {
+  const coins = pickArray(payload, 'result', 'coins')
+  const want = symbol.toUpperCase()
+  const matches: string[] = []
+  for (const coin of coins) {
+    const rec = asRecord(coin)
+    if (!rec) continue
+    if (pickString(rec, 'symbol').toUpperCase() !== want) continue
+    if (pickNumber(rec, 'marketCap', 'marketCapUsd') < MIN_SYMBOL_MARKET_CAP_USD) continue
+    if (!hasSupportedEvmDeployment(rec)) continue
+    const id = pickString(rec, 'id', 'coinId')
+    if (id) matches.push(id)
+    if (matches.length > 1) return null // ambiguous — bail before reading the rest
+  }
+  return matches.length === 1 ? (matches[0] ?? null) : null
+}
+
+// Resolves a long-tail cashtag to a canonical coinId via `/coins?symbol=`, or null.
+// Sorted by rank asc (sortBy=marketCap is broken — pulls deep-rank coins forward), with
+// a generous page so the single-match guard sees every same-symbol contender. ~5 credits,
+// so the caller caches the result (incl. the negative) on a long TTL (see index.ts).
+export async function resolveSymbolToCoinId(env: Env, symbol: string): Promise<string | null> {
+  const payload = await cs(env, '/coins', {
+    symbol,
+    limit: '100',
+    sortBy: 'rank',
+    sortDir: 'asc',
+  })
+  return pickSymbolMatch(payload, symbol)
 }
 
 // Best-effort 7-day sparkline. Returns `null` on failure OR an empty result so the

@@ -6,22 +6,45 @@ import {
   UpstreamError,
   detectTokenCoinId,
   fetchChart,
+  fetchCoinDetailRaw,
   fetchFearGreed,
-  fetchTokenDetail,
   fetchWallet,
   fetchWalletPnl,
+  normalizeToken,
+  pickSafetyTarget,
+  resolveSymbolToCoinId,
 } from './coinstats'
+import { fetchDexToken } from './dexscreener'
 import { type Env, WORKER_VERSION } from './env'
 import { fetchTokenSafety } from './goplus'
 import { withinDailyCap, withinIpLimit } from './ratelimit'
 
 const ADDRESS_RE = /^0x[a-f0-9]{40}$/
+// CoinStats coin-id (e.g. `pepe`, `pancakeswap-token`, or a case-sensitive
+// `<base58>_solana` for non-EVM coins). The ticker path only sends ids from our top-1000
+// whitelist, but validate defensively. Case is preserved — CoinStats ids are
+// case-sensitive (lowercasing a Solana base58 id 404s it).
+const COIN_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/
+// A bare cashtag SYMBOL (uppercased), letter-led. The extension only sends long-tail
+// (non-whitelisted) symbols here; validate defensively against the resolution endpoint.
+const SYMBOL_RE = /^[A-Z][A-Z0-9]{1,10}$/
 
 // Kind-cache sentinel for addresses that are not token contracts.
 const NOT_A_TOKEN = 'addr:'
+// symid: cache sentinel for a cashtag SYMBOL with no confident single match — lets the
+// negative result be cached (the cache layer never stores null) so a slang $WORD doesn't
+// re-burn the ~5-credit symbol search on every hover.
+const NO_SYMBOL_MATCH = '-'
 
 const DAY = 60 * 60 * 24
+// A real token contract's type is permanent → cache a positive coinId for a month. But a
+// MISS is often just CoinStats' few-hour indexing lag (SPEC §9), so the NOT_A_TOKEN
+// sentinel gets a short TTL: a freshly-indexed token then upgrades from the DexScreener
+// fallback to the full CoinStats card (7d chart) within hours, not 30 days. The re-detect
+// cost is negligible — every NOT_A_TOKEN path already does the 40cr wallet call (300s TTL),
+// which dwarfs the 5cr re-detect.
 const KIND_TTL = 30 * DAY
+const NOT_A_TOKEN_TTL = 6 * 60 * 60
 const TOKEN_TTL = 60
 // The 7d sparkline is hourly data, so it can outlive the 60s price refresh; a longer
 // TTL also cuts the ~3-credit chart call. Cached apart from the token so a chart hiccup
@@ -32,6 +55,14 @@ const CHART_TTL = 900
 const SAFETY_TTL = 6 * 60 * 60
 const WALLET_TTL = 300
 const FEAR_GREED_TTL = 300
+// Short — DexScreener-sourced tokens are fresh/long-tail and move fast; still long enough
+// to collapse a viral burst on one address against DexScreener's per-IP rate limit.
+const DEX_TTL = 60
+// A symbol→coinId mapping is stable, and the search costs ~5 credits, so cache it (incl.
+// the NO_SYMBOL_MATCH negative) for a day. This bounds the long-tail cashtag path to at
+// most one symbol search per symbol per day — the price data still refreshes via the
+// short token:/chart: TTLs inside buildToken.
+const SYMBOL_ID_TTL = DAY
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -116,33 +147,117 @@ app.get('/v1/lookup', async (c) => {
   }
 })
 
-// Layered cache per SPEC §4: stable kind lookup gates the expensive wallet call.
-async function resolve(env: Env, addr: string, chain: Chain): Promise<LookupResult> {
-  const kind = await cached(env, `kind:${chain}:${addr}`, KIND_TTL, async () => {
-    const coinId = await detectTokenCoinId(env, addr, chain)
-    return coinId ?? NOT_A_TOKEN
-  })
+// v0.2 — $TICKER path. The extension resolves a cashtag to a coinId via its preloaded
+// top-1000 whitelist and looks it up here. The safety chain is derived from the coin's
+// contractAddresses (pickSafetyTarget), so no chain param is needed.
+app.get('/v1/coin', async (c) => {
+  const coinId = c.req.query('coinId') ?? ''
+  if (!COIN_ID_RE.test(coinId)) {
+    return c.json<LookupError>({ error: 'invalid_address' }, 400)
+  }
 
-  if (kind && kind !== NOT_A_TOKEN) {
-    const token = await cached(env, `token:${kind}`, TOKEN_TTL, () => fetchTokenDetail(env, kind))
-    if (token) {
-      // Chart and safety scan are independent, best-effort, and each cached on its
-      // own TTL — fan them out in parallel so neither stacks onto the token latency.
-      const [sparkline, safety] = await Promise.all([
-        cached(env, `chart:${kind}`, CHART_TTL, () => fetchChart(env, kind)),
-        cached(env, `safety:${chain}:${addr}`, SAFETY_TTL, () =>
-          fetchTokenSafety(env, addr, chain),
-        ),
-      ])
-      return {
-        kind: 'token',
-        data: {
-          ...token,
-          sparkline: sparkline ?? [],
-          ...(safety ? { safety } : {}),
-        },
-      }
+  try {
+    const result = (await buildToken(c.env, coinId, 'derive')) ?? { kind: 'unknown' }
+    c.header('Cache-Control', 'public, max-age=60')
+    return c.json<LookupResult>(result)
+  } catch (err) {
+    if (err instanceof UpstreamError) {
+      return c.json<LookupError>({ error: 'upstream_error' }, 503)
     }
+    throw err
+  }
+})
+
+// v0.2 — long-tail cashtag path. A $SYMBOL the extension couldn't resolve from its
+// top-1000 whitelist. We resolve it to a single canonical coin via `/coins?symbol=`
+// (single-match + market-cap guard — silent on the reused-ticker trap) and then reuse
+// the ticker card path. Coverage is EVM-only and CoinStats-indexed; fresh micro-caps
+// (largely Solana) stay `unknown` by design (see ROADMAP / SPEC §9).
+app.get('/v1/symbol', async (c) => {
+  const symbol = (c.req.query('symbol') ?? '').toUpperCase()
+  if (!SYMBOL_RE.test(symbol)) {
+    return c.json<LookupError>({ error: 'invalid_address' }, 400)
+  }
+
+  try {
+    const resolved = await cached(
+      c.env,
+      `symid:${symbol}`,
+      SYMBOL_ID_TTL,
+      async () => (await resolveSymbolToCoinId(c.env, symbol)) ?? NO_SYMBOL_MATCH,
+    )
+    const result: LookupResult =
+      resolved && resolved !== NO_SYMBOL_MATCH
+        ? ((await buildToken(c.env, resolved, 'derive')) ?? { kind: 'unknown' })
+        : { kind: 'unknown' }
+    c.header('Cache-Control', 'public, max-age=60')
+    return c.json<LookupResult>(result)
+  } catch (err) {
+    if (err instanceof UpstreamError) {
+      return c.json<LookupError>({ error: 'upstream_error' }, 503)
+    }
+    throw err
+  }
+})
+
+type SafetyTarget = { chain: Chain; contract: string }
+
+// Assembles a token card from a coinId: cached raw detail (so we can also derive the
+// safety target) + parallel cached chart + cached GoPlus safety. Shared by the address
+// path (explicit target = the hovered contract+chain) and the ticker path ('derive' =
+// target read from the coin's contractAddresses). Returns null if the detail is empty.
+async function buildToken(
+  env: Env,
+  coinId: string,
+  safety: SafetyTarget | 'derive',
+): Promise<LookupResult | null> {
+  const detail = await cached(env, `token:${coinId}`, TOKEN_TTL, () =>
+    fetchCoinDetailRaw(env, coinId),
+  )
+  if (!detail) return null
+  const token = normalizeToken(coinId, detail, [])
+  const target = safety === 'derive' ? pickSafetyTarget(detail) : safety
+  // Chart and safety are independent, best-effort, each on its own TTL — fan out in
+  // parallel so neither stacks onto the detail latency.
+  const [sparkline, safetyResult] = await Promise.all([
+    cached(env, `chart:${coinId}`, CHART_TTL, () => fetchChart(env, coinId)),
+    target
+      ? cached(env, `safety:${target.chain}:${target.contract}`, SAFETY_TTL, () =>
+          fetchTokenSafety(env, target.contract, target.chain),
+        )
+      : Promise.resolve(null),
+  ])
+  return {
+    kind: 'token',
+    data: {
+      ...token,
+      sparkline: sparkline ?? [],
+      ...(safetyResult ? { safety: safetyResult } : {}),
+    },
+  }
+}
+
+// Layered cache per SPEC §4: stable kind lookup gates the expensive wallet call. This is a
+// hand-rolled read-through (not `cached`) because the TTL depends on the result — a positive
+// coinId is permanent (KIND_TTL), a miss is short-lived (NOT_A_TOKEN_TTL, see above).
+async function resolve(env: Env, addr: string, chain: Chain): Promise<LookupResult> {
+  const kindKey = `kind:${chain}:${addr}`
+  // JSON-encoded to stay wire-compatible with entries written by `cached()` before this
+  // read-through existed (a plain-string read would mis-parse those across the deploy).
+  const hit = await env.CACHE.get(kindKey, 'json')
+  let kind = typeof hit === 'string' ? hit : null
+  if (kind === null) {
+    const coinId = await detectTokenCoinId(env, addr, chain)
+    kind = coinId ?? NOT_A_TOKEN
+    await env.CACHE.put(kindKey, JSON.stringify(kind), {
+      expirationTtl: coinId ? KIND_TTL : NOT_A_TOKEN_TTL,
+    })
+  }
+
+  if (kind !== NOT_A_TOKEN) {
+    // Safety target is the hovered contract on the inferred chain (no derivation needed).
+    const result = await buildToken(env, kind, { chain, contract: addr })
+    if (result) return result
   }
 
   const wallet = await cached(env, `wallet:${chain}:${addr}`, WALLET_TTL, () =>
@@ -155,6 +270,18 @@ async function resolve(env: Env, addr: string, chain: Chain): Promise<LookupResu
       fetchWalletPnl(env, addr, chain),
     )
     return { kind: 'wallet', data: { ...wallet, ...(pnl ? { pnl } : {}) } }
+  }
+
+  // CoinStats had nothing (not a token, not a wallet). Try the free, zero-credit DexScreener
+  // fallback before giving up — it covers fresh / long-tail / wrong-chain-inferred tokens
+  // CoinStats hasn't indexed. CoinStats-first is preserved: this only runs on a miss. The
+  // pair's chain is authoritative, so a wrong `chain` guess no longer hides an indexed token.
+  const dex = await cached(env, `dex:${addr}`, DEX_TTL, () => fetchDexToken(env, addr))
+  if (dex) {
+    const safety = await cached(env, `safety:${dex.chain}:${addr}`, SAFETY_TTL, () =>
+      fetchTokenSafety(env, addr, dex.chain),
+    )
+    return { kind: 'token', data: { ...dex.token, ...(safety ? { safety } : {}) } }
   }
 
   return { kind: 'unknown' }

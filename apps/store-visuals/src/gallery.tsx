@@ -302,9 +302,9 @@ function featPath(w: number, h: number): string {
 const TWEET_TOKEN: Tweet = {
   name: 'frog dealer',
   handle: '@frogdoteth',
-  pre: 'aping the new meta. ca: ',
-  addr: '0x6982…1933',
-  post: ' — send it',
+  pre: 'everyone still fading ',
+  addr: '$PEPE',
+  post: ' — chart says otherwise',
   name2: 'gm capital',
   handle2: '@gmcapital',
   tx2: 'liquidity looking healthy across majors this week. staying long.',
@@ -332,7 +332,7 @@ export function Gallery() {
         label="Screenshot 1"
         l1="Hover any wallet —"
         l2="see its balance"
-        sub="Point at any address on X and AlphaPeek surfaces its total balance, allocation, and top holdings — without leaving the timeline."
+        sub="Point at any address on X and AlphaPeek surfaces its total balance, all-time PnL, allocation, and top holdings — without leaving the timeline."
       >
         <Browser w={1040} h={560} url="x.com/home" live>
           <Scene
@@ -355,9 +355,9 @@ export function Gallery() {
         w={1280}
         h={800}
         label="Screenshot 2"
-        l1="Spot the token"
-        l2="instantly"
-        sub="Every contract address becomes a live quote — symbol, price, 24-hour move, market cap and volume — read it at a glance."
+        l1="Every token, with a"
+        l2="safety check"
+        sub="Hover a $cashtag or a contract address for a live quote — price, 24h move, market cap, volume — plus a free contract-safety verdict: honeypot, buy/sell tax."
       >
         <Browser w={1040} h={560} url="x.com/home" live>
           <Scene
@@ -446,7 +446,7 @@ export function Gallery() {
           </div>
           <div className="tile-rule" />
           <p className="tagline">
-            Peek any wallet or token,
+            Peek any wallet, token, or $cashtag,
             <br />
             <span className="em">right on X.</span>
           </p>
@@ -466,7 +466,7 @@ export function Gallery() {
             </div>
             <div className="mq-rule" />
             <p className="tagline lg">
-              Peek any wallet or token, <span className="em">right on X.</span>
+              Peek any wallet, token, or $cashtag, <span className="em">right on X.</span>
             </p>
             <span className="mq-badge">Hover · Peek · Done</span>
           </div>
@@ -500,7 +500,7 @@ function PopupMock() {
         <header className="flex items-center gap-[9px] border-b-[1.5px] border-line p-[13px]">
           <LogoMark size="sm" />
           <span className="text-[16px] font-bold tracking-[0.02em]">ALPHAPEEK</span>
-          <span className="ml-auto text-[10px] font-bold tracking-[0.08em] text-dim">v0.1</span>
+          <span className="ml-auto text-[10px] font-bold tracking-[0.08em] text-dim">v0.2</span>
         </header>
 
         <section className="border-b-[1.5px] border-line p-[13px]">

@@ -69,6 +69,12 @@ export function dexScreenerUrl(chain: Chain, addr: string): string {
   return `https://dexscreener.com/${DEXSCREENER_SLUG[chain]}/${addr}`
 }
 
+// Chain-agnostic search — for the unknown state, where we don't trust the inferred chain
+// (the address may be a brand-new token on any chain, or not a token at all).
+export function dexScreenerSearchUrl(addr: string): string {
+  return `https://dexscreener.com/?q=${encodeURIComponent(addr)}`
+}
+
 export function coinStatsCoinUrl(coinId: string): string {
   return `https://coinstats.app/coins/${encodeURIComponent(coinId)}`
 }

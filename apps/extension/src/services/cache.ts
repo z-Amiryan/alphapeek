@@ -5,7 +5,8 @@ import { type DBSchema, type IDBPDatabase, openDB } from 'idb'
 
 export type CacheEntry = {
   key: string
-  chain: Chain
+  // Address lookups only; coin ($TICKER) entries are keyed by coinId and omit it.
+  chain?: Chain
   addr: string
   result: LookupResult
   ts: number // Date.now() when stored
@@ -50,18 +51,33 @@ function keyOf(chain: Chain, addr: string): string {
   return `${chain}:${addr.toLowerCase()}`
 }
 
-export async function getCached(chain: Chain, addr: string): Promise<LookupResult | null> {
-  const key = keyOf(chain, addr)
+// $TICKER lookups are keyed by coinId, not chain+addr. Prefixed so they're easy to
+// keep out of the address-shaped recent list (see recentLookups).
+function coinKeyOf(coinId: string): string {
+  return `coin:${coinId.toLowerCase()}`
+}
+
+// Long-tail cashtags are keyed by the symbol (the coinId is resolved Worker-side). Same
+// prefix treatment as coin: so they stay out of the address-shaped recent list.
+function symbolKeyOf(symbol: string): string {
+  return `sym:${symbol.toUpperCase()}`
+}
+
+// Read + TTL-evict by key. Dropping expired entries on read keeps the cache bounded
+// and matches the privacy policy (no retention past TTL); we're about to hit the
+// network anyway, so the extra IndexedDB delete adds no perceptible latency.
+async function readEntry(key: string): Promise<LookupResult | null> {
   const entry = await (await db()).get(STORE, key)
   if (!entry) return null
   if (Date.now() - entry.ts > TTL_MS[entry.result.kind]) {
-    // Drop expired entries on read so the cache stays bounded and matches the
-    // privacy policy (no retention past TTL). We're about to hit the network
-    // anyway, so the extra IndexedDB delete adds no perceptible latency.
     await (await db()).delete(STORE, key)
     return null
   }
   return entry.result
+}
+
+export async function getCached(chain: Chain, addr: string): Promise<LookupResult | null> {
+  return readEntry(keyOf(chain, addr))
 }
 
 export async function putCached(chain: Chain, addr: string, result: LookupResult): Promise<void> {
@@ -69,6 +85,34 @@ export async function putCached(chain: Chain, addr: string, result: LookupResult
     key: keyOf(chain, addr),
     chain,
     addr: addr.toLowerCase(),
+    result,
+    ts: Date.now(),
+  }
+  await (await db()).put(STORE, entry)
+}
+
+export async function getCachedCoin(coinId: string): Promise<LookupResult | null> {
+  return readEntry(coinKeyOf(coinId))
+}
+
+export async function putCachedCoin(coinId: string, result: LookupResult): Promise<void> {
+  const entry: CacheEntry = {
+    key: coinKeyOf(coinId),
+    addr: coinId.toLowerCase(),
+    result,
+    ts: Date.now(),
+  }
+  await (await db()).put(STORE, entry)
+}
+
+export async function getCachedSymbol(symbol: string): Promise<LookupResult | null> {
+  return readEntry(symbolKeyOf(symbol))
+}
+
+export async function putCachedSymbol(symbol: string, result: LookupResult): Promise<void> {
+  const entry: CacheEntry = {
+    key: symbolKeyOf(symbol),
+    addr: symbol.toUpperCase(),
     result,
     ts: Date.now(),
   }
@@ -83,7 +127,10 @@ export async function recentLookups(limit = 5): Promise<CacheEntry[]> {
   const out: CacheEntry[] = []
   let cursor = await (await db()).transaction(STORE).store.index('by-ts').openCursor(null, 'prev')
   while (cursor && out.length < limit) {
-    out.push(cursor.value)
+    // Coin/symbol (cashtag) entries are keyed by coinId or symbol, not an address — keep
+    // them out of the address-shaped recent list.
+    const k = cursor.value.key
+    if (!k.startsWith('coin:') && !k.startsWith('sym:')) out.push(cursor.value)
     cursor = await cursor.continue()
   }
   return out

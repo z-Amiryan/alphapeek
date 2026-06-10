@@ -5,7 +5,10 @@ import {
   normalizeToken,
   normalizeWallet,
   normalizeWalletPnl,
+  pickSafetyTarget,
+  pickSymbolMatch,
 } from '../src/coinstats'
+import { normalizeDexToken } from '../src/dexscreener'
 import { normalizeSafety } from '../src/goplus'
 
 const ADDRESS_RE = /^0x[a-f0-9]{40}$/
@@ -233,5 +236,250 @@ describe('normalizeFearGreed', () => {
       value: 52,
       label: 'Neutral',
     })
+  })
+})
+
+describe('normalizeToken source', () => {
+  it('stamps source=coinstats on the CoinStats path', () => {
+    expect(normalizeToken('pepe', { symbol: 'pepe' }, []).source).toBe('coinstats')
+  })
+})
+
+describe('pickSafetyTarget', () => {
+  // contractAddresses[].blockchain uses the /coins slug namespace (binance_smart, etc.).
+  it('prefers the canonical singular contractAddress deployment (CAKE = BSC-native)', () => {
+    const cake = {
+      contractAddress: '0x0E09FABB73BD3Ade0a17ECC321fD13a19e81cE82', // mixed case → case-insensitive
+      contractAddresses: [
+        {
+          blockchain: 'binance_smart',
+          contractAddress: '0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82',
+        },
+        { blockchain: 'ethereum', contractAddress: '0x152649ea73beab28c5b49b26eb48f7ead6d4c898' },
+        { blockchain: 'solana', contractAddress: '4qQeZ5LwSz6HuupUu8jCtgXyW1mYQcNbFAW1sWZp89HL' },
+      ],
+    }
+    expect(pickSafetyTarget(cake)).toEqual({
+      chain: 'bsc',
+      contract: '0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82',
+    })
+  })
+
+  it('falls back to ethereum when the singular address matches no listed deployment', () => {
+    const t = pickSafetyTarget({
+      contractAddress: '0xnot_in_the_list',
+      contractAddresses: [
+        { blockchain: 'binance_smart', contractAddress: '0xbsc' },
+        { blockchain: 'ethereum', contractAddress: '0xeth' },
+      ],
+    })
+    expect(t).toEqual({ chain: 'ethereum', contract: '0xeth' })
+  })
+
+  it('falls back to SUPPORTED_CHAINS order when neither canonical nor ethereum apply', () => {
+    // polygon (index 2) outranks arbitrum (index 4); no singular contractAddress given.
+    const t = pickSafetyTarget({
+      contractAddresses: [
+        { blockchain: 'arbitrum-one', contractAddress: '0xarb' },
+        { blockchain: 'polygon-pos', contractAddress: '0xpoly' },
+      ],
+    })
+    expect(t).toEqual({ chain: 'polygon', contract: '0xpoly' })
+  })
+
+  it('reads through a { coin } / { result } wrapper', () => {
+    expect(
+      pickSafetyTarget({
+        coin: { contractAddresses: [{ blockchain: 'base', contractAddress: '0xb' }] },
+      }),
+    ).toEqual({ chain: 'base', contract: '0xb' })
+  })
+
+  it('returns null when no deployment is on a supported chain', () => {
+    expect(
+      pickSafetyTarget({ contractAddresses: [{ blockchain: 'solana', contractAddress: 'soL' }] }),
+    ).toBeNull()
+  })
+
+  it('returns null for missing / empty contractAddresses', () => {
+    expect(pickSafetyTarget({})).toBeNull()
+    expect(pickSafetyTarget({ contractAddresses: [] })).toBeNull()
+    expect(pickSafetyTarget(null)).toBeNull()
+  })
+})
+
+describe('pickSymbolMatch', () => {
+  const evm = (id: string, marketCap: number, blockchain = 'ethereum') => ({
+    id,
+    symbol: 'FOO',
+    marketCap,
+    contractAddresses: [{ blockchain, contractAddress: '0xfoo' }],
+  })
+
+  it('resolves when exactly one supported-EVM coin clears the dust floor', () => {
+    const payload = {
+      result: [
+        evm('foo-token', 5_000_000, 'base'),
+        // dust below the floor → ignored, so the survivor is unique
+        evm('foo-scam', 4_000),
+      ],
+    }
+    expect(pickSymbolMatch(payload, 'FOO')).toBe('foo-token')
+  })
+
+  it('stays silent (null) when multiple real EVM coins share the ticker (the $MOON trap)', () => {
+    const payload = {
+      result: [evm('moon-a', 270_000, 'arbitrum-one'), evm('moon-b', 296_000, 'binance_smart')],
+    }
+    // Two contenders above the floor → never guess; the card stays silent.
+    expect(pickSymbolMatch(payload, 'FOO')).toBeNull()
+  })
+
+  it('ignores non-EVM (e.g. Solana) deployments — we can neither show nor scan them', () => {
+    const payload = {
+      result: [
+        {
+          id: 'sol-foo',
+          symbol: 'FOO',
+          marketCap: 9_000_000,
+          contractAddresses: [{ blockchain: 'solana', contractAddress: 'soL' }],
+        },
+      ],
+    }
+    expect(pickSymbolMatch(payload, 'FOO')).toBeNull()
+  })
+
+  it('matches the symbol case-insensitively and ignores fuzzy non-matches', () => {
+    const payload = {
+      result: [
+        {
+          id: 'foo-token',
+          symbol: 'foo',
+          marketCap: 5_000_000,
+          contractAddresses: [{ blockchain: 'ethereum', contractAddress: '0xfoo' }],
+        },
+        // a different ticker the upstream returned alongside → must not count
+        {
+          id: 'foobar',
+          symbol: 'FOOBAR',
+          marketCap: 9_000_000,
+          contractAddresses: [{ blockchain: 'base', contractAddress: '0xbar' }],
+        },
+      ],
+    }
+    expect(pickSymbolMatch(payload, 'FOO')).toBe('foo-token')
+  })
+
+  it('returns null when every match is below the floor or has no supported deployment', () => {
+    expect(pickSymbolMatch({ result: [evm('foo-dust', 1_000)] }, 'FOO')).toBeNull()
+    expect(pickSymbolMatch({ result: [] }, 'FOO')).toBeNull()
+    expect(pickSymbolMatch(null, 'FOO')).toBeNull()
+  })
+})
+
+describe('normalizeDexToken', () => {
+  const ADDR = '0xtoken00000000000000000000000000000000aa'
+
+  // DexScreener: priceUsd is a string, the rest numbers; pairs span DEX/chain variants.
+  it('picks the highest-liquidity supported-chain pair as authoritative', () => {
+    const out = normalizeDexToken(ADDR, {
+      pairs: [
+        {
+          chainId: 'ethereum', // higher price but LOWER liquidity → must not win
+          url: 'https://dexscreener.com/ethereum/0xeth',
+          baseToken: { address: ADDR, name: 'Brett', symbol: 'brett' },
+          quoteToken: { address: '0xusdc', name: 'USD Coin', symbol: 'USDC' },
+          priceUsd: '0.051',
+          priceChange: { h24: 4 },
+          liquidity: { usd: 20_000 },
+          volume: { h24: 50_000 },
+          marketCap: 0,
+          info: { imageUrl: 'http://img/eth.png' },
+        },
+        {
+          chainId: 'base', // highest liquidity → authoritative chain
+          url: 'https://dexscreener.com/base/0xbase',
+          baseToken: { address: ADDR, name: 'Brett', symbol: 'brett' },
+          quoteToken: { address: '0xweth', name: 'WETH', symbol: 'WETH' },
+          priceUsd: '0.05',
+          priceChange: { h24: 30 }, // ≥25 → high_volatility
+          liquidity: { usd: 800_000 },
+          volume: { h24: 2_000_000 }, // healthy → no low_liquidity
+          marketCap: 500_000_000,
+          fdv: 600_000_000,
+          info: { imageUrl: 'http://img/base.png' },
+        },
+      ],
+    })
+    expect(out?.chain).toBe('base')
+    expect(out?.token.symbol).toBe('BRETT')
+    expect(out?.token.price).toBe(0.05)
+    expect(out?.token.marketCap).toBe(500_000_000)
+    expect(out?.token.volume).toBe(2_000_000)
+    expect(out?.token.source).toBe('dexscreener')
+    expect(out?.token.url).toBe('https://dexscreener.com/base/0xbase')
+    expect(out?.token.coinId).toBe(ADDR)
+    expect(out?.token.sparkline).toEqual([])
+    expect(out?.token.flags).toContain('high_volatility')
+    expect(out?.token.flags).not.toContain('low_liquidity')
+  })
+
+  it('falls back to fdv when marketCap is absent', () => {
+    const out = normalizeDexToken(ADDR, {
+      pairs: [
+        {
+          chainId: 'bsc',
+          url: 'u',
+          baseToken: { address: ADDR, name: 'X', symbol: 'x' },
+          priceUsd: '1',
+          priceChange: { h24: 1 },
+          liquidity: { usd: 50_000 },
+          volume: { h24: 100_000 },
+          fdv: 1_234,
+          info: {},
+        },
+      ],
+    })
+    expect(out?.chain).toBe('bsc')
+    expect(out?.token.marketCap).toBe(1_234)
+  })
+
+  it('returns null below the dust-liquidity floor', () => {
+    expect(
+      normalizeDexToken(ADDR, {
+        pairs: [
+          {
+            chainId: 'base',
+            baseToken: { address: ADDR, symbol: 'scam' },
+            priceUsd: '0.00001',
+            liquidity: { usd: 500 }, // < MIN_LIQUIDITY_USD
+            volume: { h24: 9 },
+          },
+        ],
+      }),
+    ).toBeNull()
+  })
+
+  it('ignores pairs on unsupported chains', () => {
+    expect(
+      normalizeDexToken(ADDR, {
+        pairs: [
+          {
+            chainId: 'solana', // not in DEX_CHAIN
+            baseToken: { address: ADDR, symbol: 'sol' },
+            priceUsd: '1',
+            liquidity: { usd: 9_000_000 },
+            volume: { h24: 1_000_000 },
+          },
+        ],
+      }),
+    ).toBeNull()
+  })
+
+  it('returns null for empty / malformed payloads', () => {
+    expect(normalizeDexToken(ADDR, {})).toBeNull()
+    expect(normalizeDexToken(ADDR, { pairs: [] })).toBeNull()
+    expect(normalizeDexToken(ADDR, { pairs: null })).toBeNull()
+    expect(normalizeDexToken(ADDR, null)).toBeNull()
   })
 })

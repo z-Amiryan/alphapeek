@@ -7,9 +7,10 @@ import { type Chain, isChain } from '@alphapeek/shared'
 import { browser } from 'wxt/browser'
 import { inferChainForAddress } from '@/lib/chain'
 import { debugError } from '@/lib/debug'
-import { findAddress } from '@/lib/regex'
+import { findAddress, findCashtag } from '@/lib/regex'
+import { requestSymbolLookup } from '@/services/messaging'
 import { DEFAULT_CHAIN_KEY, getDefaultChain } from '@/services/settings'
-import { type CardHandle, mountCard } from '@/shadow/mount'
+import { type CardHandle, type Target, mountCard } from '@/shadow/mount'
 import '@/shadow/styles.css'
 
 const HOVER_DELAY = 200
@@ -21,6 +22,13 @@ const STYLE_ID = 'alphapeek-underline-style'
 // from the detected X theme (light vs dim/lights-out) instead of reading --ap-acc.
 const UNDERLINE_VAR = '--alphapeek-acc'
 const ACCENT_BY_THEME = { light: '#aad400', dark: '#c6f432' } as const
+
+// Stable identity for a hover target (dedup "already showing this" + post-async checks).
+function targetKey(target: Target): string {
+  if (target.kind === 'address') return `a:${target.addr}`
+  if (target.kind === 'coin') return `c:${target.coinId}`
+  return `s:${target.symbol}`
+}
 
 export default defineContentScript({
   matches: ['https://x.com/*', 'https://twitter.com/*'],
@@ -38,12 +46,17 @@ export default defineContentScript({
     })
 
     let activeAnchor: HTMLElement | null = null
-    let pendingAddr: string | null = null
+    let pendingTarget: Target | null = null
     let hoverTimer: ReturnType<typeof setTimeout> | undefined
     let dismissTimer: ReturnType<typeof setTimeout> | undefined
     let card: CardHandle | null = null
-    let cardAddr: string | null = null
+    let cardKey: string | null = null
     let pointerOnCard = false
+    // Monotonic show-generation. Every reset / new schedule bumps it; an in-flight showCard
+    // captures its value and aborts after each await if a newer show has started. Without this,
+    // two concurrent showCards for the same target (the pre-flight + mount awaits widen the
+    // window) both mount, and the untracked first card orphans — the frozen top-left ghost.
+    let showSeq = 0
     // Live cursor position, used to sanity-check dismissals against real geometry.
     let lastX = 0
     let lastY = 0
@@ -51,6 +64,7 @@ export default defineContentScript({
     ensureUnderlineStyle()
 
     function reset(): void {
+      showSeq++
       clearTimeout(hoverTimer)
       clearTimeout(dismissTimer)
       hoverTimer = undefined
@@ -59,14 +73,14 @@ export default defineContentScript({
         card.remove()
         card = null
       }
-      cardAddr = null
+      cardKey = null
       pointerOnCard = false
       if (activeAnchor) {
         activeAnchor.classList.remove(UNDERLINE_CLASS)
         activeAnchor.removeEventListener('mouseleave', onAnchorLeave)
         activeAnchor = null
       }
-      pendingAddr = null
+      pendingTarget = null
     }
 
     // A fixed, top-layer card overlapping the anchor (plus the shadow-root boundary) makes the
@@ -99,23 +113,38 @@ export default defineContentScript({
       scheduleDismiss()
     }
 
-    async function showCard(anchor: HTMLElement, addr: string, chain: Chain): Promise<void> {
+    async function showCard(anchor: HTMLElement, target: Target, seq: number): Promise<void> {
       hoverTimer = undefined
-      // Bail if the target changed while the timer was pending.
-      if (activeAnchor !== anchor || pendingAddr !== addr) return
+      const key = targetKey(target)
+      // Superseded if a newer show/reset bumped the generation, or the active target moved on.
+      const stale = (): boolean =>
+        seq !== showSeq ||
+        activeAnchor !== anchor ||
+        !pendingTarget ||
+        targetKey(pendingTarget) !== key
+      if (stale()) return
 
-      // Replacing a card on the same anchor (e.g. a second address in one
-      // element): tear the old one down so it can't dangle.
+      // Long-tail $symbol: confirm the Worker resolves it to a single token BEFORE showing
+      // anything, so a hovered slang word neither flashes an underline nor pops a "No data"
+      // card. The result is cached, so the card's own lookup below is an instant cache hit.
+      if (target.kind === 'symbol') {
+        const res = await requestSymbolLookup(target.symbol)
+        if (stale()) return
+        if (!res.ok || res.data.kind !== 'token') return
+        anchor.classList.add(UNDERLINE_CLASS)
+      }
+
+      // Replacing a card on the same anchor (e.g. a second match in one element):
+      // tear the old one down so it can't dangle.
       if (card) {
         card.remove()
         card = null
-        cardAddr = null
+        cardKey = null
       }
 
       try {
         const handle = await mountCard(ctx, {
-          addr,
-          chain,
+          target,
           anchor,
           theme: detectTheme(),
           onClose: reset,
@@ -128,19 +157,19 @@ export default defineContentScript({
             scheduleDismiss()
           },
         })
-        // Target may have changed during the async mount; discard if so.
-        if (activeAnchor !== anchor || pendingAddr !== addr) {
+        // A newer show started during the async mount → discard this one so it can't orphan.
+        if (stale()) {
           handle.remove()
           return
         }
         card = handle
-        cardAddr = addr
+        cardKey = key
       } catch (err) {
         debugError('mountCard failed', err)
       }
     }
 
-    function scheduleShow(anchor: HTMLElement, addr: string, context: string): void {
+    function scheduleShow(anchor: HTMLElement, target: Target): void {
       clearTimeout(hoverTimer)
       clearTimeout(dismissTimer)
 
@@ -148,15 +177,41 @@ export default defineContentScript({
         reset()
         activeAnchor = anchor
         document.documentElement.style.setProperty(UNDERLINE_VAR, ACCENT_BY_THEME[detectTheme()])
-        anchor.classList.add(UNDERLINE_CLASS)
         anchor.addEventListener('mouseleave', onAnchorLeave)
+        // Known-resolvable targets (addresses, whitelisted cashtags) underline immediately
+        // as the discoverability cue. A long-tail $symbol underlines only once the Worker
+        // confirms a single match (in showCard), so hovering slang never flashes a cue.
+        if (target.kind !== 'symbol') anchor.classList.add(UNDERLINE_CLASS)
       }
-      pendingAddr = addr
+      pendingTarget = target
 
-      const chain = inferChainForAddress(context, addr, defaultChain)
+      // Capture the generation this show belongs to so a later show/reset can supersede it.
+      const seq = ++showSeq
       hoverTimer = setTimeout(() => {
-        void showCard(anchor, addr, chain)
+        void showCard(anchor, target, seq)
       }, HOVER_DELAY)
+    }
+
+    // An EVM address (chain inferred from nearby text) or a $CASHTAG. The 0x branch wins if
+    // both somehow appear — an address is the higher-signal match. A cashtag is a whitelisted
+    // coin (known coinId → shown immediately) or a long-tail symbol (resolved on demand, and
+    // only shown if the Worker finds a single confident match — see showCard).
+    function detectTarget(text: string): Target | null {
+      if (text.includes('0x')) {
+        const addr = findAddress(text)
+        if (addr) {
+          return { kind: 'address', addr, chain: inferChainForAddress(text, addr, defaultChain) }
+        }
+      }
+      if (text.includes('$')) {
+        const hit = findCashtag(text)
+        if (hit) {
+          return hit.coinId
+            ? { kind: 'coin', coinId: hit.coinId, symbol: hit.symbol }
+            : { kind: 'symbol', symbol: hit.symbol }
+        }
+      }
+      return null
     }
 
     function onMouseMove(e: MouseEvent): void {
@@ -170,21 +225,30 @@ export default defineContentScript({
       if (pointerOnCard) return
       const node = textNodeAt(e.clientX, e.clientY)
       const text = node?.textContent
-      // Quick reject before running the regex.
-      if (!text || !text.includes('0x')) return
-      const addr = findAddress(text)
-      if (!addr) return
+      if (!text) return
+      const target = detectTarget(text)
+      if (!target) return
       const anchor = node?.parentElement
       if (!anchor) return
       // Already showing this exact target → nothing to do.
-      if (card && cardAddr === addr && activeAnchor === anchor) return
-      scheduleShow(anchor, addr, text)
+      if (card && cardKey === targetKey(target) && activeAnchor === anchor) return
+      scheduleShow(anchor, target)
+    }
+
+    // Scrolling the feed dismisses the card (standard hover-tooltip behavior). On X's
+    // virtualized timeline the anchor's tweet gets recycled mid-scroll, which would leave
+    // a card chasing a detached node (Floating UI then pins it to 0,0 — the top-left ghost);
+    // closing on scroll avoids that entirely. Capture phase catches scrolls in any nested
+    // container, and the card's own internal scroll is fine since the card doesn't scroll.
+    function onScroll(): void {
+      if (activeAnchor || card) reset()
     }
 
     document.body.addEventListener('mouseover', onMouseOver)
     // Passive cursor tracking so the dismiss-time geometry check uses the live position
     // (mouseover only fires on enter, not while the cursor sits on the address).
     document.addEventListener('mousemove', onMouseMove, { passive: true })
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true })
 
     // X virtualizes its feed: if the anchored node is detached (tweet recycled),
     // tear the card down so it can't dangle (UX edge #5). This is the only job of
@@ -199,6 +263,7 @@ export default defineContentScript({
       observer.disconnect()
       document.body.removeEventListener('mouseover', onMouseOver)
       document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('scroll', onScroll, { capture: true })
     })
   },
 })

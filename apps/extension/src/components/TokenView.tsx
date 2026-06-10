@@ -4,6 +4,7 @@ import type { Chain, TokenFlag, TokenSummary } from '@alphapeek/shared'
 import { coinStatsCoinUrl, dexScreenerUrl } from '@/lib/chain'
 import { formatCompact, formatPct, formatPrice } from '@/lib/format'
 import { ArrowOut } from './icons'
+import { InfoTooltip } from './InfoTooltip'
 import { SafetyBadge } from './SafetyBadge'
 import { SafetyDetails } from './SafetyDetails'
 import { Sparkline } from './Sparkline'
@@ -33,6 +34,11 @@ export function TokenView({ token, chain, addr }: Props) {
         <span className="truncate text-[13px] font-bold tracking-[0.04em]">
           {token.symbol} / USD
         </span>
+        {token.source === 'dexscreener' ? (
+          <InfoTooltip label="Data source">
+            Live DEX market data via DexScreener. Not financial advice.
+          </InfoTooltip>
+        ) : null}
         <span className="ml-auto shrink-0 bg-acc px-1.5 py-0.5 text-[9px] font-bold tracking-[0.14em] text-acc-ink">
           LIVE
         </span>
@@ -97,22 +103,40 @@ export function TokenView({ token, chain, addr }: Props) {
       {token.safety ? <SafetyDetails safety={token.safety} /> : null}
 
       <div className="flex border-t-[1.5px] border-line">
-        <a
-          href={coinStatsCoinUrl(token.coinId)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={BTN}
-        >
-          CoinStats <ArrowOut />
-        </a>
-        <a
-          href={dexScreenerUrl(chain, addr)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={BTN}
-        >
-          DEX <ArrowOut />
-        </a>
+        {token.source === 'dexscreener' ? (
+          // No CoinStats coin page for an unindexed token — link straight to the DexScreener
+          // pair (its authoritative chain), falling back to a chain+addr URL if absent.
+          <a
+            href={token.url || dexScreenerUrl(chain, addr)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={BTN}
+          >
+            DexScreener <ArrowOut />
+          </a>
+        ) : (
+          <>
+            <a
+              href={coinStatsCoinUrl(token.coinId)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={BTN}
+            >
+              CoinStats <ArrowOut />
+            </a>
+            {/* $TICKER cards have no hovered contract — show CoinStats only. */}
+            {addr ? (
+              <a
+                href={dexScreenerUrl(chain, addr)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={BTN}
+              >
+                DEX <ArrowOut />
+              </a>
+            ) : null}
+          </>
+        )}
       </div>
     </div>
   )

@@ -151,9 +151,11 @@ type TokenSummary = {
   pCh24h: number
   marketCap: number
   volume: number
-  sparkline: number[]  // 7d, ~168 points
+  sparkline: number[]  // 7d, ~168 points (empty for DexScreener-sourced tokens — no free history)
   flags: TokenFlag[]   // 'low_liquidity' | 'high_volatility' — market-data hints, not a safety verdict
   safety?: TokenSafety // v0.2: GoPlus contract-safety scan (shape in §6); best-effort, absent if unavailable
+  source: 'coinstats' | 'dexscreener'  // v0.2: data provider; 'dexscreener' = free zero-credit fallback
+  url?: string         // v0.2: external page (the DexScreener pair) when source='dexscreener'
 }
 
 type WalletSummary = {
@@ -178,6 +180,50 @@ type WalletSummary = {
 - `429` — rate limited (per IP, 60/min)
 - `503` — daily cap reached OR upstream CoinStats error
 
+#### `GET /v1/coin` (v0.2 — $TICKER path)
+Resolves a CoinStats coinId (from a detected `$CASHTAG`) to a token card. Shares the token
+assembly (`buildToken`) and the `token:`/`chart:`/`safety:` cache keys with `/v1/lookup`, so a
+cashtag and its contract collapse to the same cached data.
+
+**Query params:**
+- `coinId` (required): a CoinStats slug, validated `^[a-z0-9][a-z0-9._-]{0,80}$`.
+
+**Behavior:** fetches coin detail + 7d chart, and derives the GoPlus safety target from the coin's
+`contractAddresses` via `pickSafetyTarget` (prefers the canonical singular `contractAddress`
+deployment, then ethereum, then `SUPPORTED_CHAINS` order; null when no supported-chain deployment
+exists → safety omitted). No `chain` param — the safety chain is derived, not supplied.
+
+**Response (200):** `{ kind: 'token'; data: TokenSummary }` (`source: 'coinstats'`), or
+`{ kind: 'unknown' }` if the detail is empty.
+
+**Errors:** `400` invalid coinId · `429` rate limited · `503` daily cap / upstream error.
+
+#### `GET /v1/symbol` (v0.2 — long-tail $TICKER path)
+Resolves a bare cashtag **symbol** the extension couldn't map from its top-1000 whitelist. A
+long-tail `$SYMBOL` is genuinely ambiguous (many coins reuse a ticker — e.g. ~19 distinct
+"MOON"s), so resolving to the highest-cap match would routinely render a confident **wrong-token**
+card. The guard converts that ambiguity into silence instead.
+
+**Query params:**
+- `symbol` (required, uppercased server-side): validated `^[A-Z][A-Z0-9]{1,10}$`.
+
+**Behavior:** `resolveSymbolToCoinId` calls `/coins?symbol=…&sortBy=rank&sortDir=asc` and applies
+`pickSymbolMatch` — a candidate must (a) match the symbol exactly, (b) have a deployment on a
+**supported EVM chain**, and (c) clear a **`MIN_SYMBOL_MARKET_CAP_USD` ($50k) dust floor**. It
+resolves **only when exactly one candidate survives**; multiple contenders → no match. The resolved
+coinId (or a `'-'` no-match sentinel) is cached under `symid:{SYMBOL}` for **a day** — the
+`/coins?symbol=` search is ~5 credits, so this bounds it to at most one search per symbol per day
+and negative-caches slang words. On a hit it reuses `buildToken` (same `token:`/`chart:`/`safety:`
+keys as `/v1/coin`), so the price still refreshes on the short token TTL.
+
+**Coverage (deliberate):** EVM-only and CoinStats-indexed. Fresh micro-caps outside CoinStats'
+index (largely Solana) stay `unknown` by design — Solana is v0.3 (see §9 / ROADMAP).
+
+**Response (200):** `{ kind: 'token'; data: TokenSummary }` (`source: 'coinstats'`), or
+`{ kind: 'unknown' }` when no single confident match exists.
+
+**Errors:** `400` invalid symbol · `429` rate limited · `503` daily cap / upstream error.
+
 #### `GET /health`
 Returns `{ ok: true, version: string }`. No auth, no rate limit.
 
@@ -185,12 +231,14 @@ Returns `{ ok: true, version: string }`. No auth, no rate limit.
 
 | Cache layer | Key pattern | TTL | Rationale |
 |---|---|---|---|
-| KV `CACHE` | `kind:{chain}:{addr}` | 30 days | An address doesn't change type |
+| KV `CACHE` | `kind:{chain}:{addr}` | 30 days (positive) / 6 hours (miss) | A real token contract's type is permanent (cache the coinId for a month); a `NOT_A_TOKEN` miss is often just CoinStats indexing lag, so it re-checks within hours and a freshly-indexed token upgrades from the DexScreener fallback to the full CoinStats card |
 | KV `CACHE` | `token:{coinId}` | 60 seconds | Price moves |
 | KV `CACHE` | `chart:{coinId}` | 900 seconds | 7d sparkline is hourly data; cached apart from `token` so a flaky chart call can't pin a blank sparkline, and to cut the ~3-credit chart cost |
 | KV `CACHE` | `wallet:{chain}:{addr}` | 300 seconds | Balances change but slowly |
 | KV `CACHE` | `pnl:{chain}:{addr}` | 300 seconds | All-time PnL (v0.2); tracks the wallet TTL |
 | KV `CACHE` | `safety:{chain}:{addr}` | 6 hours | GoPlus contract-safety scan (v0.2); slow-moving, but a renounce/blacklist flip should surface same-day |
+| KV `CACHE` | `dex:{addr}` | 60 seconds | DexScreener coverage fallback (v0.2); address-keyed (chain-agnostic). Short TTL — fresh/long-tail tokens move fast — but enough to collapse a viral burst on one address against DexScreener's per-IP rate limit |
+| KV `CACHE` | `symid:{SYMBOL}` | 1 day | Long-tail cashtag → coinId resolution (v0.2). Stable mapping; the `/coins?symbol=` search is ~5 credits, so a long TTL bounds it to one search per symbol per day and negative-caches slang (`'-'` sentinel). Price stays fresh via the `token:`/`chart:` keys inside `buildToken` |
 
 > The Worker sends `Cache-Control: public, max-age=…` on `/v1/lookup` and `/v1/fear-greed`
 > responses (a hint for the browser / service-worker HTTP cache). There is intentionally
@@ -239,8 +287,35 @@ fire on legit tokens (CAKE/AAVE/PEPE), so they're informational `notes`, never
 verdict-driving. Best-effort: a scan failure or unsupported chain leaves `safety`
 undefined and the card renders without it.
 
-**Chain slugs differ PER ENDPOINT — three namespaces (verified live 2026-06-02).** Do not share
-one map. `/coins?blockchains=` uses CoinStats' internal "chain" slugs; `/wallet/balance` uses the
+### DexScreener coverage fallback (v0.2 — external, free, keyless)
+
+Not a CoinStats endpoint. `GET {DEXSCREENER_BASE_URL}/latest/dex/tokens/{addr}`
+(`api.dexscreener.com`). **No API key, no CoinStats credit, no daily-cap impact** — the same
+free-source model as GoPlus. `apps/worker/src/dexscreener.ts` normalizes the response into a
+`TokenSummary` (`source:'dexscreener'`).
+
+**Fires ONLY on a CoinStats miss** — the principle is *CoinStats-first; a free source only fills
+what CoinStats can't*. In `resolve()` it runs after both `detectTokenCoinId` → null **and** the
+wallet path is empty, immediately before returning `unknown`. It never replaces a working CoinStats
+path, so it adds **zero** CoinStats credits (the detect + wallet probe were already spent on what
+would otherwise have been an `unknown`). Covers the three CoinStats coverage gaps: ~hours indexing
+latency (fresh tokens), the long tail, and **wrong-chain inference** (the chosen pair's `chainId` is
+authoritative, so a bad `chain` guess no longer hides an indexed token).
+
+- **Pair selection:** among pairs whose `chainId` maps to one of our 7 supported chains, pick the
+  highest `liquidity.usd`. Below `MIN_LIQUIDITY_USD` (10,000) → `null` (stay `unknown`; never a
+  confident card for a dust/honeypot pair). The chosen pair's `chainId` is the **authoritative
+  chain**, used both for the card and for the GoPlus scan that follows (`safety:{chain}:{addr}`).
+- **DexScreener uses its OWN chain-slug namespace** (`ethereum`, `bsc`, `base`, `arbitrum`,
+  `polygon`, `optimism`, `avalanche` — NOT CoinStats' `binance_smart`/`polygon-pos`). The worker
+  keeps a separate `DEX_CHAIN` map; do not reuse `COINS_CHAIN`. Verified live 2026-06-09.
+- **Best-effort:** a failure, timeout (2.5s), `429`, or below-floor result returns `null` and the
+  lookup falls through to the `unknown` card. `sparkline` is empty (no free historical series).
+- **Rate limit:** DexScreener's free tier is per-IP; the Worker is the caller (shared Cloudflare
+  egress). The `dex:{addr}` KV cache (60s) absorbs bursts; on `429` we degrade silently.
+
+**Chain slugs differ PER ENDPOINT — three CoinStats namespaces (verified live 2026-06-02), plus a
+fourth for DexScreener (above).** Do not share one map. `/coins?blockchains=` uses CoinStats' internal "chain" slugs; `/wallet/balance` uses the
 `connectionId` from `GET /wallet/blockchains` (NOT a `blockchain` param). The worker keeps two
 maps (`COINS_CHAIN`, `WALLET_CHAIN`) in `apps/worker/src/coinstats.ts`.
 
@@ -363,12 +438,38 @@ export default defineConfig({
    - Send a `LOOKUP` message to background SW.
    - On response, mount the React hover card in Shadow DOM, positioned via Floating UI.
 4. On `mouseout` from the address AND the card, dismiss after 100ms grace period.
+5. On `scroll` (capture phase, any container), dismiss immediately — standard hover-tooltip behavior, and it prevents a card from chasing a tweet that X recycles mid-scroll (which would leave Floating UI pinning an orphaned card to the 0,0 top-left corner). A monotonic show-generation counter guards the async show path (pre-flight + mount awaits) so two concurrent shows for the same target can't both mount and orphan one.
 
 **Address detection (`lib/regex.ts`):**
 ```ts
 // Word-boundary lookbehind/lookahead to avoid matching inside longer hex (e.g. tx hashes)
 export const EVM_ADDRESS = /(?<![a-fA-F0-9])0x[a-fA-F0-9]{40}(?![a-fA-F0-9])/g
 ```
+
+**$TICKER (cashtag) detection (v0.2 — `lib/regex.ts` + `lib/tickers.generated.ts`):**
+```ts
+// `$` not preceded by a word char or another `$` + a letter-led 1–10 char symbol.
+export const TICKER = /(?<![A-Za-z0-9$])\$([A-Za-z][A-Za-z0-9]{0,9})\b/
+```
+`findCashtag` uppercases the match and looks it up in **`TICKERS`** — a preloaded
+`Map<UPPER_SYMBOL, coinId>` of the **top-1000 CoinStats coins by rank** (≈936 symbols after
+collisions). A whitelist hit is the high-precision path (`$100`, plain English, stock tickers all
+fall away; on a symbol collision the lowest-rank/canonical coin wins, so scam tokens reusing a
+popular ticker never resolve) → it carries a known coinId and looks up via `/v1/coin`. The asset
+is generated by **`scripts/build-tickers.mjs`** (`pnpm tickers:build`, committed output, run
+manually — never in postinstall, it needs the API key) from
+`GET /coins?limit=1000&sortBy=rank&sortDir=asc` (rank, **not** marketCap — that sort is broken
+upstream).
+
+**Long-tail cashtags (v0.2):** a `$SYMBOL` that is **not** whitelisted but ≥3 chars resolves to a
+`{kind:'symbol'}` target that looks up via `/v1/symbol` (the Worker's single-match + market-cap
+guard, §4). Two UX rules keep loosening the gate honest: (1) the discoverability **underline is
+deferred** — a long-tail symbol underlines only *after* the Worker confirms a single match, so
+hovering slang (`$GM`, `$WAGMI`) never flashes a cue; (2) `showCard` runs a **pre-flight** symbol
+lookup and mounts the card only on a `token` result, so a non-match leaves no trace (no underline,
+no "No data" card). The pre-flight result is cached, so the card's own lookup is an instant hit.
+`content.ts` carries one `Target = {kind:'address',addr,chain} | {kind:'coin',coinId,symbol} |
+{kind:'symbol',symbol}`.
 
 **Chain inference (`lib/chain.ts`):**
 For v0.1 on X only, there's no URL context. Inference order:
@@ -388,6 +489,13 @@ For v0.1 on X only, there's no URL context. Inference order:
   1. Check IndexedDB — hit + not expired → return immediately
   2. Miss/expired → `fetch(WORKER_URL + '/v1/lookup?...')`
   3. Store result, return to content script
+- On message `COIN_LOOKUP { coinId }` (v0.2, $TICKER): same flow against `/v1/coin`, cached under
+  a `coin:{coinId}` IndexedDB key (token-kind TTL). Coin entries are kept out of the popup's
+  address-shaped recent list.
+- On message `SYMBOL_LOOKUP { symbol }` (v0.2, long-tail $TICKER): same flow against `/v1/symbol`,
+  cached under a `sym:{SYMBOL}` IndexedDB key. The `unknown` result is cached too (60-min unknown
+  TTL), so a hovered slang word doesn't re-hit the Worker — mirroring the Worker's own negative
+  cache. Symbol entries are kept out of the popup's address-shaped recent list.
 - Worker URL is `import.meta.env.VITE_WORKER_URL` at build time (set via `.env`).
 
 ### Popup UI (extension icon click)
@@ -464,6 +572,8 @@ export type TokenSummary = {
   sparkline: number[]
   flags: TokenFlag[]    // market-data hints only — NOT a safety verdict
   safety?: TokenSafety  // v0.2: best-effort; absent when the scan is unavailable
+  source: 'coinstats' | 'dexscreener'  // v0.2: 'dexscreener' = free zero-credit coverage fallback
+  url?: string          // v0.2: DexScreener pair URL when source='dexscreener'
 }
 
 // v0.2 — wallet performance. CoinStats exposes fixed buckets (no 30-day window),
@@ -533,17 +643,36 @@ If a budget is exceeded after honest effort, document the gap in the PR and deci
 | 10 | Open X in two tabs, hover same address | Cache shared via background SW |
 | 11 | Click extension icon (first time this browser session) | Brief branded splash, then fades into popup content; reduced-motion shows an instant cut, no flash |
 | 12 | Reopen the popup in the same session | No splash — straight to content, no delay. Splash returns only after a browser restart |
+| 13 | Hover `$PEPE` / `$CAKE` on a tweet (v0.2) | Token card (price/chart/mcap) + GoPlus verdict; single CoinStats footer link (no DEX link — no hovered contract) |
+| 14 | Hover a non-whitelisted but uniquely-resolvable EVM cashtag, e.g. `$AEVO` (v0.2 long-tail) | Token card + GoPlus verdict, resolved via `/v1/symbol` single-match; the underline appears *with* the card (deferred), not on hover |
+| 15 | Hover a cashtag, then its contract address (v0.2) | Both render the same token; second is cache-served (shared `token:`/`chart:`/`safety:` keys) |
+| 16 | Hover a contested/sub-floor cashtag, e.g. `$MOON` (v0.2 long-tail) | No card AND no underline flash — `/v1/symbol` finds no single confident match (reused ticker), so nothing renders |
+| 17 | Hover slang or a short cashtag, e.g. `$GM` / `$ME` (v0.2) | No card, no Worker hit — below the 3-char long-tail floor in `findCashtag` |
 
 ## 9. Known v0.1 limitations (document in README and roadmap)
 
 - **EVM only** — Solana, BTC, others in v0.2+
 - **X only** — Etherscan, DEXScreener, Telegram, Discord in v0.2+
-- **No $TICKER** detection — lands in v0.2
+- **$TICKER detection — shipped in v0.2** (top-1000 whitelist + a long-tail fallback via
+  `/v1/symbol`). **Long-tail coverage is deliberately narrow:** it's **EVM-only and
+  CoinStats-indexed**, and resolves only when a symbol has exactly **one** supported-EVM coin above
+  the $50k floor (the single-match guard — silent on the reused-ticker trap, so never a confident
+  wrong-token card). What it still misses, by design: fresh micro-caps outside CoinStats' index and
+  the **Solana** majority of degen cashtags (Solana needs a base58 detection model + RugCheck
+  safety → v0.3). It also fires comparatively rarely (most degen symbols are reused → silent).
+  **Bundle note (SPEC §7):** the whitelist adds ~14.7 KB gz to the content script, which was
+  *already* over the <25 KB budget (~68 KB) because React + the hover card are eagerly bundled into
+  the content entry rather than lazy-loaded on first hover. The whitelist is a justified add; the
+  real fix is lazy-splitting the card — tracked as a separate follow-up, not a $TICKER regression.
 - **No persistent watchlist** — in v0.3 with optional account
 - **No alerts/notifications** — in v0.3
 - **Chain inference is best-effort** — Twitter has no URL context, may guess wrong chain
-- **Not a launch-sniping tool — ~hours of indexing latency.** CoinStats indexes new tokens within
-  a few hours of launch (a ~1h-old token returns `unknown`; ~9h-old resolves), regardless of
-  liquidity. AlphaPeek is a **trending/established-token inspector**, not a minute-zero ape tool.
-  Tokens too new to be indexed should render a dedicated **"Too new — not indexed yet"** card
-  (with a DexScreener link), never a generic error. Market the product accordingly.
+- **Indexing latency — largely closed in v0.2 by the DexScreener fallback.** CoinStats indexes new
+  tokens within a few hours of launch (a ~1h-old token returns `unknown` from CoinStats; ~9h-old
+  resolves), regardless of liquidity. As of v0.2 a CoinStats miss now falls through to the free
+  **DexScreener** fallback (§4), so fresh / long-tail / wrong-chain-inferred EVM tokens with real
+  liquidity (≥ `MIN_LIQUIDITY_USD`) render a full token card + GoPlus verdict instead of `unknown`.
+  Remaining `unknown` cases (sub-floor liquidity, non-supported chains, brand-new pairs not yet on
+  DexScreener) render the [UnknownView] last-resort card, which links to both the block explorer and
+  a DexScreener search. AlphaPeek is still a trending/established-token inspector at heart, but the
+  fresh-token cliff is no longer a hard wall.

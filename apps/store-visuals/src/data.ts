@@ -18,6 +18,17 @@ export const TOKEN: TokenSummary = {
   volume: 480_000_000,
   sparkline: SPARK,
   flags: [],
+  source: 'coinstats',
+  // v0.2 headline: a free contract-safety verdict on every token card (GoPlus).
+  // A clean, legit token reads "Safe · No critical risks" with 0% taxes.
+  safety: {
+    verdict: 'safe',
+    buyTaxPct: 0,
+    sellTaxPct: 0,
+    flags: [],
+    notes: [],
+    source: 'goplus',
+  },
 }
 
 export const WALLET: WalletSummary = {
@@ -25,6 +36,8 @@ export const WALLET: WalletSummary = {
   chain: 'base',
   totalUsd: 48_237_512,
   stablecoinPct: 18,
+  // v0.2: all-time PnL — the smart-money "is this wallet actually winning?" read.
+  pnl: { window: 'all_time', absUsd: 12_400_000, pct: 38.5 },
   holdings: [
     { symbol: 'ETH', name: 'Ethereum', imgUrl: '', usd: 20_259_755, pct: 42 },
     { symbol: 'USDC', name: 'USD Coin', imgUrl: '', usd: 8_682_752, pct: 18 },

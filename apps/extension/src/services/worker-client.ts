@@ -18,6 +18,14 @@ export async function lookup(addr: string, chain: Chain): Promise<RuntimeRespons
   return request<LookupResult>(`/v1/lookup?${qs}`)
 }
 
+export async function coinLookup(coinId: string): Promise<RuntimeResponse<LookupResult>> {
+  return request<LookupResult>(`/v1/coin?coinId=${encodeURIComponent(coinId)}`)
+}
+
+export async function symbolLookup(symbol: string): Promise<RuntimeResponse<LookupResult>> {
+  return request<LookupResult>(`/v1/symbol?symbol=${encodeURIComponent(symbol)}`)
+}
+
 export async function fearGreed(): Promise<RuntimeResponse<FearGreed>> {
   return request<FearGreed>('/v1/fear-greed')
 }

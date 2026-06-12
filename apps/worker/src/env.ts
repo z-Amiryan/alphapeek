@@ -7,8 +7,8 @@ export type Env = {
   COINSTATS_BASE_URL: string
   // GoPlus token-security base (free, keyless public API). A plain var, not a secret.
   GOPLUS_BASE_URL: string
-  // DexScreener base (free, keyless public API). Zero-credit token-coverage fallback
-  // for addresses CoinStats can't resolve. A plain var, not a secret.
+  // DexScreener base (free, keyless public API). Zero-credit supplementary market-data
+  // source for the very newest tokens (CoinStats stays primary). A plain var, not a secret.
   DEXSCREENER_BASE_URL: string
   COINSTATS_API_KEY: string
 }

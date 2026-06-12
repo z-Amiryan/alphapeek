@@ -29,12 +29,12 @@ The proxy does **not** log:
 
 ## Third parties
 
-When AlphaPeek looks up an address, the proxy sends that address to the [CoinStats Public API](https://coinstats.app/api-docs/) to fetch token or wallet data. For **token contracts** (EVM contracts and Solana mints alike), the proxy also sends the contract/mint address to the [GoPlus Token Security API](https://gopluslabs.io/) for a free, keyless contract-safety scan. If CoinStats has no data for the address, the proxy additionally sends it to the [DexScreener API](https://dexscreener.com/) — a free, keyless market-data lookup that covers both EVM chains and Solana — as a coverage fallback for newer or less-indexed tokens. Each provider's own privacy policy applies to that interaction. Your browser never contacts CoinStats, GoPlus, or DexScreener directly — all requests go through the proxy.
+When AlphaPeek looks up an address, the proxy sends that address to the [CoinStats Public API](https://coinstats.app/api-docs/) to fetch token or wallet data. For **token contracts** (EVM contracts and Solana mints alike), the proxy also sends the contract/mint address to the [GoPlus Token Security API](https://gopluslabs.io/) for a free, keyless contract-safety scan. For a brand-new token still propagating to data indexes, the proxy may additionally send the address to the [DexScreener API](https://dexscreener.com/) — a free, keyless market-data lookup that covers both EVM chains and Solana — to surface the very newest tokens. Each provider's own privacy policy applies to that interaction. Your browser never contacts CoinStats, GoPlus, or DexScreener directly — all requests go through the proxy.
 
 ## Local storage on your device
 
 AlphaPeek uses two browser storage mechanisms:
-- **IndexedDB** — caches address lookup results for a short period (90 seconds for tokens, 10 minutes for wallets, 1 hour for unindexed addresses) to reduce network requests. This same cache also powers the popup's "recent lookups" list.
+- **IndexedDB** — caches address lookup results for a short period (90 seconds for tokens, 10 minutes for wallets, 1 hour for addresses with no data yet) to reduce network requests. This same cache also powers the popup's "recent lookups" list.
 - **`chrome.storage.local`** — stores your settings (your default chain).
 
 You can clear both at any time by removing the extension or via Chrome's "Clear browsing data → Cookies and site data."

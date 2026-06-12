@@ -61,7 +61,7 @@ pnpm --filter @alphapeek/worker run dev   # local Wrangler dev server
 # Test with:
 curl "http://localhost:8787/v1/lookup?chain=ethereum&addr=0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce"
 # Should return a token result for SHIB. (Use SHIB/PEPE, not USDT/USDC — those
-# canonical mega-caps are not in CoinStats' contract-address index; see SPEC §4.)
+# canonical mega-caps surface via the wallet path, not contract detection; see SPEC §4.)
 ```
 
 ### 🚨 ASK USER: Deploy to Cloudflare production

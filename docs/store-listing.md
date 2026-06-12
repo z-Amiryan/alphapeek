@@ -78,7 +78,7 @@ AlphaPeek detects EVM wallet and contract addresses (0x…), Solana token mints,
 cashtags ($PEPE, $WIF) in tweets and fetches read-only market data through a
 lightweight proxy. It works on x.com and twitter.com. Crypto data is powered by
 CoinStats, contract-safety checks by GoPlus (EVM and Solana), with DexScreener
-filling in fresh tokens. Solana wallet balances are not yet supported.
+adding the very newest tokens. Solana wallet balances are not yet supported.
 
 ── GOOD TO KNOW ──
 

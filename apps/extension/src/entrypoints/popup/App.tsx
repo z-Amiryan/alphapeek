@@ -2,6 +2,7 @@
 // the popup is our own surface.
 import { type Chain, DEFAULT_CHAIN } from '@alphapeek/shared'
 import { useEffect, useState } from 'react'
+import { browser } from 'wxt/browser'
 import { ChainSelect } from '@/components/ChainSelect'
 import { FearGreedBadge } from '@/components/FearGreedBadge'
 import { ArrowOut, LogoMark } from '@/components/icons'
@@ -10,6 +11,11 @@ import { RecentLookups } from '@/components/RecentLookups'
 import { BTN, FOOT, LABEL } from '@/components/ui'
 import { getDefaultChain, setDefaultChain, shouldShowSplash } from '@/services/settings'
 import { Splash } from './Splash'
+
+// Read the version label from the manifest so it tracks wxt.config.ts and can't drift
+// (it previously hardcoded "v0.2-beta" into v0.3). version_name carries the beta suffix.
+const MANIFEST = browser.runtime.getManifest()
+const VERSION_LABEL = `v${MANIFEST.version_name ?? MANIFEST.version}`
 
 // Public links (the live remotes). Not secrets, safe to inline.
 const REPO_URL = 'https://github.com/z-Amiryan/alphapeek'
@@ -88,7 +94,7 @@ export function App() {
             <LogoMark animated />
             <span className="text-[16px] font-bold tracking-[0.02em]">ALPHAPEEK</span>
             <span className="ml-auto text-[10px] font-bold tracking-[0.08em] text-dim">
-              v0.2-beta
+              {VERSION_LABEL}
             </span>
           </header>
 

@@ -1,4 +1,4 @@
-# Chrome Web Store listing copy — AlphaPeek v0.2
+# Chrome Web Store listing copy — AlphaPeek v0.3
 
 > Ready-to-paste copy for the Web Store Developer Dashboard. Source of truth for the
 > **detailed description** — keywords must read naturally in prose, never as a list
@@ -23,13 +23,13 @@ Productivity
 ## Short description (≤132 chars — must match `manifest.description`)
 
 ```
-Hover any wallet, token or $cashtag on X (Twitter) — balances, PnL, price, 7-day charts, and a contract-safety check, instantly.
+Hover any wallet, token, Solana mint or $cashtag on X (Twitter) — balances, PnL, price, charts & a contract-safety check.
 ```
 
 ## Single-purpose statement
 
 ```
-AlphaPeek shows wallet, token, and cashtag info — including a contract-safety check — when you hover an address or $ticker on X/Twitter.
+AlphaPeek shows wallet, token (EVM & Solana), and cashtag info — including a contract-safety check — when you hover an address, mint, or $ticker on X/Twitter.
 ```
 
 ---

@@ -17,7 +17,7 @@ export default defineConfig({
     return {
       name: 'AlphaPeek',
       description:
-        'Hover any wallet, token or $cashtag on X (Twitter) — balances, PnL, price, 7-day charts, and a contract-safety check, instantly.',
+        'Hover any wallet, token, Solana mint or $cashtag on X (Twitter) — balances, PnL, price, charts & a contract-safety check.',
       // Chrome's manifest `version` must be numeric; `version_name` carries the
       // human-readable beta label (v0.3 = the Solana-token cut; Solana wallets deferred).
       version: '0.3.0',

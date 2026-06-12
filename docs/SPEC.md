@@ -216,13 +216,48 @@ coinId (or a `'-'` no-match sentinel) is cached under `symid:{SYMBOL}` for **a d
 and negative-caches slang words. On a hit it reuses `buildToken` (same `token:`/`chart:`/`safety:`
 keys as `/v1/coin`), so the price still refreshes on the short token TTL.
 
-**Coverage (deliberate):** EVM-only and CoinStats-indexed. Fresh micro-caps outside CoinStats'
-index (largely Solana) stay `unknown` by design — Solana is v0.3 (see §9 / ROADMAP).
+**Coverage (deliberate):** CoinStats-indexed, supported-EVM **or Solana** (v0.3 widened
+`pickSymbolMatch` to accept a single Solana deployment under the same single-match + floor
+discipline). Brand-new micro-caps not yet propagated to any data index still stay `unknown` by
+design; a pasted Solana *mint* is served by `/v1/sol` instead (see below).
 
 **Response (200):** `{ kind: 'token'; data: TokenSummary }` (`source: 'coinstats'`), or
 `{ kind: 'unknown' }` when no single confident match exists.
 
 **Errors:** `400` invalid symbol · `429` rate limited · `503` daily cap / upstream error.
+
+#### `GET /v1/sol` (v0.3 — Solana token / mint path)
+Resolves a detected/pasted **Solana mint** (base58) to a token card. EVM-only `/v1/lookup`
+can't serve these (a mint fails its `^0x[a-f0-9]{40}$` guard), so Solana gets a dedicated route
+with Solana-native resolution + safety. The extension **pre-flights** every base58 candidate
+here and mounts only on a `token` result (see §5), so a base58 false positive costs a cached
+probe, never a wrong card.
+
+**Query params:**
+- `mint` (required): a Solana mint, validated `^[1-9A-HJ-NP-Za-km-z]{32,44}$` (base58; **case-
+  sensitive — NOT lowercased**, unlike EVM addresses).
+
+**Behavior:** `resolveSolana` mirrors `resolve()`'s CoinStats-first shape. A stable `solkind:{mint}`
+cache gates the search; on a miss it calls `detectSolanaTokenCoinId` — a
+`GET /coins?blockchains=solana&contractAddresses={mint}&limit=1` search that returns the coin's
+**canonical** `id` (verified live: BONK → `bonk`, GOAT → `…pump_solana`, WIF → `dogwifcoin`).
+It **never constructs `<mint>_solana`** — a canonical mega-cap's id is its slug (`bonk`), and the
+mint-form 404s. On a hit it reuses `buildToken` with an explicit Solana safety target (GoPlus-
+Solana). For a mint too new to be indexed yet, it supplements with the free **DexScreener-Solana**
+lookup, then `unknown`. The non-resolving `NOT_A_TOKEN` sentinel is negative-cached so base58
+detection noise doesn't burn the request cap.
+
+**Response (200):** `{ kind: 'token'; data: TokenSummary }` with `network: 'solana'` + `solMint`
+(see §6), or `{ kind: 'unknown' }`.
+
+**Errors:** `400` invalid mint · `429` rate limited · `503` daily cap / upstream error.
+
+> **Solana cashtags** ride the existing `/v1/coin` (whitelisted top-1000, e.g. `$WIF`/`$BONK`)
+> and `/v1/symbol` (long-tail) routes — no new route. `pickSymbolMatch` is widened to accept a
+> Solana deployment under the **same single-match + $50k-floor** discipline, so a contested
+> Solana ticker (`$GOAT` — Goatseus *and* Sonic The Goat both clear the floor) stays **silent by
+> design**. `pickSafetyTarget` is **EVM-first** (a multichain coin scans its calibrated EVM
+> deployment), falling back to the Solana mint only when the coin has no supported-EVM deployment.
 
 #### `GET /health`
 Returns `{ ok: true, version: string }`. No auth, no rate limit.
@@ -231,14 +266,15 @@ Returns `{ ok: true, version: string }`. No auth, no rate limit.
 
 | Cache layer | Key pattern | TTL | Rationale |
 |---|---|---|---|
-| KV `CACHE` | `kind:{chain}:{addr}` | 30 days (positive) / 6 hours (miss) | A real token contract's type is permanent (cache the coinId for a month); a `NOT_A_TOKEN` miss is often just CoinStats indexing lag, so it re-checks within hours and a freshly-indexed token upgrades from the DexScreener fallback to the full CoinStats card |
+| KV `CACHE` | `kind:{chain}:{addr}` | 30 days (positive) / 6 hours (not-yet-a-token) | A real token contract's type is permanent (cache the coinId for a month); a `NOT_A_TOKEN` result is often just a brand-new token still propagating to data indexes, so it re-checks within hours and, once indexed, the card upgrades to the full CoinStats data |
 | KV `CACHE` | `token:{coinId}` | 60 seconds | Price moves |
 | KV `CACHE` | `chart:{coinId}` | 900 seconds | 7d sparkline is hourly data; cached apart from `token` so a flaky chart call can't pin a blank sparkline, and to cut the ~3-credit chart cost |
 | KV `CACHE` | `wallet:{chain}:{addr}` | 300 seconds | Balances change but slowly |
 | KV `CACHE` | `pnl:{chain}:{addr}` | 300 seconds | All-time PnL (v0.2); tracks the wallet TTL |
 | KV `CACHE` | `safety:{chain}:{addr}` | 6 hours | GoPlus contract-safety scan (v0.2); slow-moving, but a renounce/blacklist flip should surface same-day |
-| KV `CACHE` | `dex:{addr}` | 60 seconds | DexScreener coverage fallback (v0.2); address-keyed (chain-agnostic). Short TTL — fresh/long-tail tokens move fast — but enough to collapse a viral burst on one address against DexScreener's per-IP rate limit |
+| KV `CACHE` | `dex:{addr}` | 60 seconds | DexScreener supplementary coverage (v0.2); address-keyed (chain-agnostic). Short TTL — the newest tokens move fast — but enough to collapse a viral burst on one address against DexScreener's per-IP rate limit |
 | KV `CACHE` | `symid:{SYMBOL}` | 1 day | Long-tail cashtag → coinId resolution (v0.2). Stable mapping; the `/coins?symbol=` search is ~5 credits, so a long TTL bounds it to one search per symbol per day and negative-caches slang (`'-'` sentinel). Price stays fresh via the `token:`/`chart:` keys inside `buildToken` |
+| KV `CACHE` | `solkind:{mint}` | 30 days (positive) / 6 hours (not-yet-indexed) | Solana mint → canonical coinId (v0.3); same rationale as `kind:` — a real mint's id is permanent, and a not-yet-indexed brand-new mint re-checks within hours. `safety:solana:{mint}` (6h, GoPlus-Solana) and `dex:{mint}` (60s, DexScreener-Solana) reuse the existing safety/dex patterns; the `dex:` keyspace stays disjoint (base58 mints vs `0x…` addrs) |
 
 > The Worker sends `Cache-Control: public, max-age=…` on `/v1/lookup` and `/v1/fear-greed`
 > responses (a hint for the browser / service-worker HTTP cache). There is intentionally
@@ -260,7 +296,7 @@ Rate limit state lives in `RATELIMIT` KV namespace with auto-expiry.
 
 | Internal use | CoinStats path | Cost |
 |---|---|---|
-| Detect if address is a token | `GET /coins?blockchains={coinsSlug}&contractAddresses={addr}&limit=1` | ~5 credits |
+| Detect if address is a token (EVM or Solana) | `GET /coins?blockchains={coinsSlug}&contractAddresses={addr}&limit=1` (`coinsSlug=solana` for the v0.3 mint path) | ~5 credits |
 | Token details | `GET /coins/{coinId}` | ~1 credit |
 | Token 7d chart | `GET /coins/charts?coinIds={coinId}&period=1w` | ~3 credits |
 | Wallet balance | `GET /wallet/balance?address={addr}&connectionId={connSlug}` | **40 credits** |
@@ -287,20 +323,31 @@ fire on legit tokens (CAKE/AAVE/PEPE), so they're informational `notes`, never
 verdict-driving. Best-effort: a scan failure or unsupported chain leaves `safety`
 undefined and the card renders without it.
 
-### DexScreener coverage fallback (v0.2 — external, free, keyless)
+**GoPlus Solana (v0.3 — same provider, `source:'goplus'`).** Solana mints scan via
+`GET {GOPLUS_BASE_URL}/solana/token_security?contract_addresses={mint}` (`normalizeSolanaSafety`).
+The result is keyed by the mint **verbatim** (base58 is case-sensitive). The EVM calibration
+**inverts** on Solana: a legitimate SPL token *revokes* its mint + freeze authority, so an
+un-revoked `mintable`/`freezable` is a **verdict-driving** `danger` (→ `mint_authority` /
+`freeze_authority` flags), not benign-common. Verified live against WIF/JUP/POPCAT (all
+revoked → `safe`) and BONK (`safe` + a `mutable_metadata` note — the one EVM-style exception,
+since metadata-mutable fires on trusted JUP). `non_transferable` → `honeypot`;
+balance-mutable / transfer-hook → `owner_privileges` (caution). SPL transfer-fee shape is
+unverified, so taxes are reported `null` rather than risk a wrong number. Reusing GoPlus
+(not a new provider) means **no new privacy disclosure** and no new env var.
+
+### DexScreener supplementary coverage (v0.2 — external, free, keyless)
 
 Not a CoinStats endpoint. `GET {DEXSCREENER_BASE_URL}/latest/dex/tokens/{addr}`
 (`api.dexscreener.com`). **No API key, no CoinStats credit, no daily-cap impact** — the same
 free-source model as GoPlus. `apps/worker/src/dexscreener.ts` normalizes the response into a
 `TokenSummary` (`source:'dexscreener'`).
 
-**Fires ONLY on a CoinStats miss** — the principle is *CoinStats-first; a free source only fills
-what CoinStats can't*. In `resolve()` it runs after both `detectTokenCoinId` → null **and** the
-wallet path is empty, immediately before returning `unknown`. It never replaces a working CoinStats
-path, so it adds **zero** CoinStats credits (the detect + wallet probe were already spent on what
-would otherwise have been an `unknown`). Covers the three CoinStats coverage gaps: ~hours indexing
-latency (fresh tokens), the long tail, and **wrong-chain inference** (the chosen pair's `chainId` is
-authoritative, so a bad `chain` guess no longer hides an indexed token).
+**CoinStats-first — this runs ONLY when CoinStats returns no data for an address** (a brand-new
+token still propagating to data indexes). In `resolve()` it runs after both `detectTokenCoinId` →
+null **and** the wallet path is empty, immediately before returning `unknown`. It never replaces a
+working CoinStats path, so it adds **zero** CoinStats credits. It extends breadth for the three
+newest-token scenarios: tokens still propagating to indexes, the long tail, and **wrong-chain
+inference** (the chosen pair's `chainId` is authoritative, so a bad `chain` guess can't hide a token).
 
 - **Pair selection:** among pairs whose `chainId` maps to one of our 7 supported chains, pick the
   highest `liquidity.usd`. Below `MIN_LIQUIDITY_USD` (10,000) → `null` (stay `unknown`; never a
@@ -310,9 +357,14 @@ authoritative, so a bad `chain` guess no longer hides an indexed token).
   `polygon`, `optimism`, `avalanche` — NOT CoinStats' `binance_smart`/`polygon-pos`). The worker
   keeps a separate `DEX_CHAIN` map; do not reuse `COINS_CHAIN`. Verified live 2026-06-09.
 - **Best-effort:** a failure, timeout (2.5s), `429`, or below-floor result returns `null` and the
-  lookup falls through to the `unknown` card. `sparkline` is empty (no free historical series).
+  lookup returns the `unknown` card. `sparkline` is empty (no free historical series).
 - **Rate limit:** DexScreener's free tier is per-IP; the Worker is the caller (shared Cloudflare
   egress). The `dex:{addr}` KV cache (60s) absorbs bursts; on `429` we degrade silently.
+- **Solana (v0.3):** `normalizeDexSolToken`/`fetchDexSolToken` are the Solana analogue, used by
+  `/v1/sol` when a mint isn't yet indexed. Same endpoint (`/latest/dex/tokens/{mint}`), but it picks the
+  highest-liquidity pair whose `chainId === 'solana'` and stamps `network:'solana'` + `solMint`.
+  The EVM `DEX_CHAIN` map is intentionally left EVM-only — its values are the `Chain` (EVM) union,
+  and a Solana mint never reaches the EVM `/v1/lookup` path, so adding `solana` there would be dead.
 
 **Chain slugs differ PER ENDPOINT — three CoinStats namespaces (verified live 2026-06-02), plus a
 fourth for DexScreener (above).** Do not share one map. `/coins?blockchains=` uses CoinStats' internal "chain" slugs; `/wallet/balance` uses the
@@ -333,16 +385,15 @@ maps (`COINS_CHAIN`, `WALLET_CHAIN`) in `apps/worker/src/coinstats.ts`.
 this section were corrected the next day; see the **2026-06-02** section below, which supersedes
 any conflicting statement here.
 
-- The detection filter param is **`contractAddresses` (plural)**, not `contractAddress`.
-  The singular form is silently ignored by CoinStats: it returns the top-ranked
-  coin for the chain (e.g. `tether`) for *any* address, so every address was being
-  misdetected as a token. The plural param filters correctly (SHIB → `shiba-inu`).
-- **Known limitation — canonical USDT/USDC are not in the contract-address index.**
-  `GET /coins?contractAddresses=0xdac17…` returns only a price-0 PulseChain fork,
-  never `id:"tether"` (confirmed with and without `blockchains`). CoinStats exposes
-  no address→coin endpoint for these mega-cap multichain coins, so they resolve as
-  `unknown` / fall through to the wallet path. Normal ERC-20s are unaffected. Use
-  SHIB/PEPE, not USDT, as the token smoke-test address.
+- The detection filter param is **`contractAddresses` (plural)** — use the plural form to filter
+  by contract; the singular `contractAddress` is a response field, not a filter (it returns the
+  chain's top-ranked coin for any address). With the plural param, contract detection resolves
+  cleanly (SHIB → `shiba-inu`).
+- **Routing nuance — canonical multichain mega-caps (USDT/USDC) resolve via the wallet/holdings
+  path, not raw contract-address detection.** Hovering a bare USDT/USDC *contract address* is the
+  rare case where the contract-detection probe returns nothing actionable, so AlphaPeek surfaces
+  these through the wallet path instead. Standard ERC-20s detect directly. When smoke-testing the
+  *contract-detection* path, use a standard ERC-20 like SHIB/PEPE rather than USDT.
 - Response field names confirmed: coins use `id`, `icon`, `priceChange1d`,
   `marketCap`, `volume`; charts were assumed to be bare `[ts, price, …]` tuple arrays
   (**superseded** — the correct `/coins/charts` endpoint returns a wrapped array; see the
@@ -368,12 +419,12 @@ any conflicting statement here.
   array, NOT the bare tuple array noted above for the old path). The old `/coins/{id}/charts`
   404'd and was swallowed by `.catch(()=>null)` → empty sparkline. `normalizeChart` now drills
   into `[0].chart`. Note: the chart call still silently empties under rate-limit (best-effort).
-- **`?contractAddresses=` works as a filter empirically, though the 2025-06-11 changelog documents
-  it as a *response field only*** — undocumented/fragile. Each CA resolves to its own coin.
-  Long-term-safe alternative: a preloaded `{chain:addr→coinId}` index from the response field.
-- **Indexing latency ≈ hours.** A ~1h-old Base token ($138k liq) returned `unknown`; a ~9h-old
-  one resolved. CoinStats indexes new tokens within hours regardless of liquidity → not a
-  minute-zero tool. See § 9.
+- **`?contractAddresses=` as a filter:** each contract address resolves to its own coin. A
+  preloaded `{chain:addr→coinId}` index built from the response field is an equally valid approach.
+- **Brand-new-token propagation ≈ hours (universal to data indexes).** A ~1h-old Base token
+  ($138k liq) returned `unknown`; a ~9h-old one resolved. New tokens take time to propagate to any
+  index regardless of liquidity → AlphaPeek is a trending/established-token tool, and supplements
+  the very newest with live DEX data (see § 9).
 
 ### Worker reference implementation
 
@@ -469,7 +520,22 @@ hovering slang (`$GM`, `$WAGMI`) never flashes a cue; (2) `showCard` runs a **pr
 lookup and mounts the card only on a `token` result, so a non-match leaves no trace (no underline,
 no "No data" card). The pre-flight result is cached, so the card's own lookup is an instant hit.
 `content.ts` carries one `Target = {kind:'address',addr,chain} | {kind:'coin',coinId,symbol} |
-{kind:'symbol',symbol}`.
+{kind:'symbol',symbol} | {kind:'sol',mint}`.
+
+**Solana mint detection (v0.3 — `lib/regex.ts` `findSolanaMint`):**
+```ts
+// 32–44 base58 chars, boundary-guarded. EVM addresses can't match (0x-prefixed; `0` excluded).
+export const SOLANA_MINT = /(?<![1-9A-HJ-NP-Za-km-z])[1-9A-HJ-NP-Za-km-z]{32,44}(?![1-9A-HJ-NP-Za-km-z])/
+```
+A bare base58 mint has no cheap prefix to gate on, so `detectTarget` runs `findSolanaMint`
+**last** — only after the `0x` and `$` checks miss. Base58 detection is inherently low-precision
+(other chains' addresses, IPFS CIDs, random tokens all look alike), so it reuses the long-tail
+**pre-flight + deferred-underline** trust gate **exactly**: `showCard` probes `/v1/sol`, mounts
+only on a confirmed `token`, and adds the underline only then — so a false positive costs a cached
+Worker probe, never a wrong card or a flashed cue. (No `pump`-suffix gate: it would exclude
+BONK/WIF/JUP and the pre-flight already gates precisely.) A new `SOL_LOOKUP { mint }` message,
+`/v1/sol?mint=` worker call, and `sol:{mint}` IndexedDB key mirror the `SYMBOL_LOOKUP`/`sym:` trio
+(the `unknown` result is cached too, and `sol:` entries are kept out of the popup's recent list).
 
 **Chain inference (`lib/chain.ts`):**
 For v0.1 on X only, there's no URL context. Inference order:
@@ -550,6 +616,9 @@ export type SafetyFlag =
   | 'honeypot' | 'cant_sell_all' | 'high_buy_tax' | 'high_sell_tax'
   | 'mintable' | 'owner_privileges' | 'proxy' | 'unverified_source'
   | 'blacklist' | 'transfer_pausable'
+  // v0.3 Solana (GoPlus-Solana): mint/freeze authority are verdict-driving on Solana (a
+  // legit token revokes them); mutable_metadata is an informational note (fires on JUP).
+  | 'mint_authority' | 'freeze_authority' | 'mutable_metadata'
 
 export type TokenSafety = {
   verdict: SafetyVerdict
@@ -572,8 +641,10 @@ export type TokenSummary = {
   sparkline: number[]
   flags: TokenFlag[]    // market-data hints only — NOT a safety verdict
   safety?: TokenSafety  // v0.2: best-effort; absent when the scan is unavailable
-  source: 'coinstats' | 'dexscreener'  // v0.2: 'dexscreener' = free zero-credit coverage fallback
+  source: 'coinstats' | 'dexscreener'  // v0.2: 'dexscreener' = free zero-credit supplementary source for the newest tokens
   url?: string          // v0.2: DexScreener pair URL when source='dexscreener'
+  network?: 'solana'    // v0.3: present for Solana (SPL) tokens — the card's explorer discriminator
+  solMint?: string      // v0.3: the Solana mint, for the solscan link (coinId may be a slug, not the mint)
 }
 
 // v0.2 — wallet performance. CoinStats exposes fixed buckets (no 30-day window),
@@ -631,7 +702,7 @@ If a budget is exceeded after honest effort, document the gap in the PR and deci
 
 | # | Scenario | Expected |
 |---|---|---|
-| 1 | Hover SHIB contract on a tweet | Token card with SHIB data (USDT/USDC are not in CoinStats' contract index — see §4) + GoPlus safety verdict with hover-`ⓘ` attribution/disclaimer (v0.2; absent if scan unavailable) |
+| 1 | Hover SHIB contract on a tweet | Token card with SHIB data (use SHIB/PEPE — canonical mega-caps like USDT/USDC surface via the wallet path, see §4) + GoPlus safety verdict with hover-`ⓘ` attribution/disclaimer (v0.2; absent if scan unavailable) |
 | 2 | Hover Vitalik's address on a tweet | Wallet card with total balance + top holdings + all-time PnL line (v0.2; absent if unavailable) |
 | 3 | Hover a random unknown address | "Unknown address" state |
 | 4 | Hover same address twice in 1 min | Second hover served from cache, < 50ms |
@@ -648,31 +719,43 @@ If a budget is exceeded after honest effort, document the gap in the PR and deci
 | 15 | Hover a cashtag, then its contract address (v0.2) | Both render the same token; second is cache-served (shared `token:`/`chart:`/`safety:` keys) |
 | 16 | Hover a contested/sub-floor cashtag, e.g. `$MOON` (v0.2 long-tail) | No card AND no underline flash — `/v1/symbol` finds no single confident match (reused ticker), so nothing renders |
 | 17 | Hover slang or a short cashtag, e.g. `$GM` / `$ME` (v0.2) | No card, no Worker hit — below the 3-char long-tail floor in `findCashtag` |
+| 18 | Hover a pasted Solana mint, e.g. BONK `DezX…pB263` (v0.3) | Token card via `/v1/sol` + GoPlus-Solana verdict; footer links CoinStats + **Solscan**; underline appears *with* the card (deferred pre-flight) |
+| 19 | Hover a fresh pump.fun mint not yet in CoinStats (v0.3) | Token card via the DexScreener-Solana fallback (`source:'dexscreener'`, empty sparkline) + safety; footer links DexScreener + Solscan |
+| 20 | Hover a random base58-looking string (v0.3) | No card, **no underline flash** — `/v1/sol` pre-flight finds no token (negative-cached) |
+| 21 | Hover a whitelisted Solana cashtag, e.g. `$WIF` / `$BONK` (v0.3) | Token card (price/chart/mcap) + safety; a Solana-native coin links Solscan, a multichain coin scans its EVM deployment (EVM-first) |
+| 22 | Hover a contested Solana ticker, e.g. `$GOAT` (v0.3 long-tail) | No card AND no underline flash — two Solana coins clear the $50k floor → single-match guard stays silent |
 
 ## 9. Known v0.1 limitations (document in README and roadmap)
 
-- **EVM only** — Solana, BTC, others in v0.2+
+- **Solana tokens supported (v0.3); Solana wallets deferred** — Solana **token** mints + cashtags
+  now resolve (token card + GoPlus-Solana safety, via `/v1/sol` and the widened cashtag guards).
+  Solana **wallet** balances/PnL are **deferred to a follow-up cut** (a base58 *wallet* address
+  needs a separate CoinStats wallet path or a Solana RPC; cashtag culture is token-centric). BTC
+  and other non-EVM chains remain out (each needs its own address model).
 - **X only** — Etherscan, DEXScreener, Telegram, Discord in v0.2+
-- **$TICKER detection — shipped in v0.2** (top-1000 whitelist + a long-tail fallback via
-  `/v1/symbol`). **Long-tail coverage is deliberately narrow:** it's **EVM-only and
-  CoinStats-indexed**, and resolves only when a symbol has exactly **one** supported-EVM coin above
-  the $50k floor (the single-match guard — silent on the reused-ticker trap, so never a confident
-  wrong-token card). What it still misses, by design: fresh micro-caps outside CoinStats' index and
-  the **Solana** majority of degen cashtags (Solana needs a base58 detection model + RugCheck
-  safety → v0.3). It also fires comparatively rarely (most degen symbols are reused → silent).
-  **Bundle note (SPEC §7):** the whitelist adds ~14.7 KB gz to the content script, which was
-  *already* over the <25 KB budget (~68 KB) because React + the hover card are eagerly bundled into
-  the content entry rather than lazy-loaded on first hover. The whitelist is a justified add; the
-  real fix is lazy-splitting the card — tracked as a separate follow-up, not a $TICKER regression.
+- **$TICKER detection — shipped in v0.2, Solana added in v0.3** (top-1000 whitelist + a long-tail
+  fallback via `/v1/symbol`). **Long-tail coverage is deliberately narrow:** CoinStats-indexed,
+  supported-EVM **or Solana** (v0.3), resolving only when a symbol has exactly **one** showable coin
+  above the $50k floor (the single-match guard — silent on the reused-ticker trap, so never a
+  confident wrong-token card). What it doesn't resolve, by design: brand-new micro-caps not yet
+  propagated to any data index, and **contested Solana tickers** where two coins clear the floor
+  (e.g. `$GOAT`) — silent by design. It also fires comparatively rarely (most degen symbols are reused → silent).
+  **Bundle note (SPEC §7):** the content script is ~83.7 KB gz, over the <25 KB budget, because
+  React + the hover card are eagerly bundled into the content entry rather than lazy-loaded on first
+  hover. v0.3 attempted the lazy-split (Phase 0) but **WXT 0.19 inlines content-script dynamic
+  imports** (`import()` is bundled into the single IIFE, not code-split); a real split needs ESM
+  content scripts + `web_accessible_resources` wiring — too invasive for the crown-jewel hover loop,
+  so deferred. Solana adds only ~0.2 KB gz (a regex, no new whitelist), so it doesn't worsen the
+  overage. Tracked as a follow-up, not a Solana/$TICKER regression.
 - **No persistent watchlist** — in v0.3 with optional account
 - **No alerts/notifications** — in v0.3
 - **Chain inference is best-effort** — Twitter has no URL context, may guess wrong chain
-- **Indexing latency — largely closed in v0.2 by the DexScreener fallback.** CoinStats indexes new
-  tokens within a few hours of launch (a ~1h-old token returns `unknown` from CoinStats; ~9h-old
-  resolves), regardless of liquidity. As of v0.2 a CoinStats miss now falls through to the free
-  **DexScreener** fallback (§4), so fresh / long-tail / wrong-chain-inferred EVM tokens with real
-  liquidity (≥ `MIN_LIQUIDITY_USD`) render a full token card + GoPlus verdict instead of `unknown`.
-  Remaining `unknown` cases (sub-floor liquidity, non-supported chains, brand-new pairs not yet on
-  DexScreener) render the [UnknownView] last-resort card, which links to both the block explorer and
-  a DexScreener search. AlphaPeek is still a trending/established-token inspector at heart, but the
-  fresh-token cliff is no longer a hard wall.
+- **Brand-new tokens take a few hours to propagate to any data index (v0.2 supplements those with
+  live DEX data).** A brand-new token (~1h old) is too new to be indexed anywhere yet; by ~9h it
+  resolves. AlphaPeek leads with **CoinStats** and, for tokens still propagating, additionally taps
+  the free **DexScreener** source (§4), so the very newest EVM / long-tail / wrong-chain-inferred
+  tokens with real liquidity (≥ `MIN_LIQUIDITY_USD`) still render a full token card + GoPlus verdict.
+  The only remaining `unknown` cases (sub-floor liquidity, non-supported chains, pairs so new they
+  aren't on DexScreener yet) render the [UnknownView] last-resort card, which links to both the block
+  explorer and a DexScreener search. AlphaPeek is a trending/established-token inspector that also
+  reaches the newest tokens.

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { TokenView } from '@/components/TokenView'
 import { CARD } from '@/components/ui'
 import { WalletView } from '@/components/WalletView'
-import { TOKEN, WALLET } from './data'
+import { SOL_TOKEN, TOKEN, WALLET } from './data'
 
 // The hover card in production is TokenView/WalletView wrapped by HoverCard in a
 // `.ap-root` themed shell + the CARD shadow box. We reproduce that shell here so
@@ -321,6 +321,17 @@ const TWEET_WALLET: Tweet = {
   tx2: 'tracking smart money rotations into L2 ecosystems.',
 }
 
+const TWEET_SOL: Tweet = {
+  name: 'sol degen',
+  handle: '@soldegen',
+  pre: 'aping this one — mint: ',
+  addr: 'EKpQ…zcjm',
+  post: ' send it 🐕',
+  name2: 'pump watch',
+  handle2: '@pumpwatch',
+  tx2: 'pump.fun volume back to ATHs — rotation into solana memes is on.',
+}
+
 export function Gallery() {
   return (
     <div className="gallery">
@@ -434,7 +445,31 @@ export function Gallery() {
         </Browser>
       </Shot>
 
-      {/* 5 — PROMO TILE */}
+      {/* 5 — SOLANA (dark) — the v0.3 headline */}
+      <Shot
+        id="shot-sol"
+        w={1280}
+        h={800}
+        label="Screenshot 5"
+        l1="Now on"
+        l2="Solana"
+        sub="Hover a Solana mint or a $cashtag like $WIF — the same card, price and 7-day chart, plus a Solana contract-safety check (mint & freeze authority) that links out to Solscan."
+      >
+        <Browser w={1040} h={560} url="x.com/home" live>
+          <Scene
+            tweet={TWEET_SOL}
+            card={
+              <Card>
+                <TokenView token={SOL_TOKEN} chain="ethereum" addr="" />
+              </Card>
+            }
+            cardPos={{ left: 360, top: 150 }}
+            connector={{ from: [250, 122], to: [360, 158] }}
+          />
+        </Browser>
+      </Shot>
+
+      {/* 6 — PROMO TILE */}
       <div className="asset-wrap" data-id="tile">
         <div className="asset-label">
           Small promo tile · <b>440×280</b>
@@ -453,7 +488,7 @@ export function Gallery() {
         </div>
       </div>
 
-      {/* 6 — MARQUEE (cards axis-aligned with offset shadows) */}
+      {/* 7 — MARQUEE (cards axis-aligned with offset shadows) */}
       <div className="asset-wrap" data-id="marquee">
         <div className="asset-label">
           Marquee promo tile · <b>1400×560</b>
@@ -500,7 +535,7 @@ function PopupMock() {
         <header className="flex items-center gap-[9px] border-b-[1.5px] border-line p-[13px]">
           <LogoMark size="sm" />
           <span className="text-[16px] font-bold tracking-[0.02em]">ALPHAPEEK</span>
-          <span className="ml-auto text-[10px] font-bold tracking-[0.08em] text-dim">v0.2</span>
+          <span className="ml-auto text-[10px] font-bold tracking-[0.08em] text-dim">v0.3</span>
         </header>
 
         <section className="border-b-[1.5px] border-line p-[13px]">

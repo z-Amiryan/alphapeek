@@ -8,10 +8,12 @@ import {
   pickSafetyTarget,
   pickSymbolMatch,
 } from '../src/coinstats'
-import { normalizeDexToken } from '../src/dexscreener'
-import { normalizeSafety } from '../src/goplus'
+import { normalizeDexSolToken, normalizeDexToken } from '../src/dexscreener'
+import { normalizeSafety, normalizeSolanaSafety } from '../src/goplus'
 
 const ADDRESS_RE = /^0x[a-f0-9]{40}$/
+// Mirrors SOL_MINT_RE in index.ts — kept local like ADDRESS_RE above.
+const SOL_MINT_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
 
 describe('address validation', () => {
   it('accepts a lowercase 40-hex address', () => {
@@ -295,9 +297,37 @@ describe('pickSafetyTarget', () => {
     ).toEqual({ chain: 'base', contract: '0xb' })
   })
 
-  it('returns null when no deployment is on a supported chain', () => {
+  it('scans Solana for a Solana-canonical coin even when it also has an EVM bridge (v0.3)', () => {
+    // CoinStats sets the top-level contractAddress to the canonical deployment (a Solana mint
+    // for BONK-class coins). The cashtag verdict must then match the mint-hover verdict, so a
+    // bridge's admin keys can't raise a false "Caution". Solana wins over the EVM bridge here.
+    const mint = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263'
     expect(
-      pickSafetyTarget({ contractAddresses: [{ blockchain: 'solana', contractAddress: 'soL' }] }),
+      pickSafetyTarget({
+        contractAddress: mint,
+        contractAddresses: [
+          { blockchain: 'solana', contractAddress: mint },
+          { blockchain: 'ethereum', contractAddress: '0xbridge0000000000000000000000000000000000' },
+        ],
+      }),
+    ).toEqual({ network: 'solana', mint })
+  })
+
+  it('falls back to a Solana mint when no supported-EVM deployment exists (v0.3)', () => {
+    // EVM-first still holds (the CAKE case above), but a Solana-only coin now yields a
+    // Solana safety target instead of null, so $GOAT-class cashtags can be scanned.
+    expect(
+      pickSafetyTarget({
+        contractAddresses: [
+          { blockchain: 'solana', contractAddress: 'CzLSujWBLFsSjncfkh59rUFqvafWcY5tzedWJSuypump' },
+        ],
+      }),
+    ).toEqual({ network: 'solana', mint: 'CzLSujWBLFsSjncfkh59rUFqvafWcY5tzedWJSuypump' })
+  })
+
+  it('ignores a non-EVM, non-Solana deployment (e.g. Tron) — returns null', () => {
+    expect(
+      pickSafetyTarget({ contractAddresses: [{ blockchain: 'tron', contractAddress: 'Txyz' }] }),
     ).toBeNull()
   })
 
@@ -335,18 +365,18 @@ describe('pickSymbolMatch', () => {
     expect(pickSymbolMatch(payload, 'FOO')).toBeNull()
   })
 
-  it('ignores non-EVM (e.g. Solana) deployments — we can neither show nor scan them', () => {
-    const payload = {
+  it('ignores deployments we can neither show nor scan (e.g. Tron); Solana now counts (v0.3)', () => {
+    const tronOnly = {
       result: [
         {
-          id: 'sol-foo',
+          id: 'tron-foo',
           symbol: 'FOO',
           marketCap: 9_000_000,
-          contractAddresses: [{ blockchain: 'solana', contractAddress: 'soL' }],
+          contractAddresses: [{ blockchain: 'tron', contractAddress: 'Tfoo' }],
         },
       ],
     }
-    expect(pickSymbolMatch(payload, 'FOO')).toBeNull()
+    expect(pickSymbolMatch(tronOnly, 'FOO')).toBeNull()
   })
 
   it('matches the symbol case-insensitively and ignores fuzzy non-matches', () => {
@@ -374,6 +404,183 @@ describe('pickSymbolMatch', () => {
     expect(pickSymbolMatch({ result: [evm('foo-dust', 1_000)] }, 'FOO')).toBeNull()
     expect(pickSymbolMatch({ result: [] }, 'FOO')).toBeNull()
     expect(pickSymbolMatch(null, 'FOO')).toBeNull()
+  })
+
+  const sol = (id: string, marketCap: number) => ({
+    id,
+    symbol: 'FOO',
+    marketCap,
+    contractAddresses: [{ blockchain: 'solana', contractAddress: `${id}mint` }],
+  })
+
+  it('resolves a single Solana coin above the floor (v0.3 — widened past EVM-only)', () => {
+    const payload = { result: [sol('foo-sol', 12_000_000), sol('foo-sol-scam', 4_000)] }
+    expect(pickSymbolMatch(payload, 'FOO')).toBe('foo-sol')
+  })
+
+  it('stays silent on two Solana coins above the floor (the $GOAT contested-ticker trap)', () => {
+    // Goatseus ($12.6M) + Sonic The Goat ($65k) both clear $50k → ambiguous → no card.
+    const payload = { result: [sol('goatseus', 12_600_000), sol('sonic-the-goat', 65_000)] }
+    expect(pickSymbolMatch(payload, 'FOO')).toBeNull()
+  })
+
+  it('stays silent when an EVM and a Solana coin both clear the floor (cross-chain trap)', () => {
+    expect(
+      pickSymbolMatch({ result: [evm('foo-eth', 5_000_000), sol('foo-sol', 9_000_000)] }, 'FOO'),
+    ).toBeNull()
+  })
+})
+
+describe('SOL_MINT_RE (base58 mint validation)', () => {
+  it('accepts real base58 mints (32–44 chars)', () => {
+    expect(SOL_MINT_RE.test('DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263')).toBe(true) // BONK, 44
+    expect(SOL_MINT_RE.test('CzLSujWBLFsSjncfkh59rUFqvafWcY5tzedWJSuypump')).toBe(true) // GOAT mint
+  })
+
+  it('rejects junk: too short, too long, and base58-excluded chars (0 O I l)', () => {
+    expect(SOL_MINT_RE.test('abc')).toBe(false)
+    expect(SOL_MINT_RE.test('0OIl'.repeat(10))).toBe(false) // excluded chars
+    expect(SOL_MINT_RE.test('0xdac17f958d2ee523a2206206994597c13d831ec7')).toBe(false) // EVM addr (0x, too short)
+    expect(SOL_MINT_RE.test('z'.repeat(45))).toBe(false) // over 44
+  })
+})
+
+describe('normalizeSolanaSafety', () => {
+  // Calibrated against a live trusted basket: WIF/JUP/POPCAT have mint/freeze/balance status "0".
+  const clean = {
+    mintable: { authority: [], status: '0' },
+    freezable: { authority: [], status: '0' },
+    balance_mutable_authority: { authority: [], status: '0' },
+    closable: { authority: [], status: '0' },
+    non_transferable: '0',
+    transfer_fee: {},
+    transfer_hook: [],
+    metadata_mutable: { metadata_upgrade_authority: [], status: '0' },
+  }
+
+  it('rates a fully-revoked SPL token as safe with no flags or notes (WIF/POPCAT profile)', () => {
+    const s = normalizeSolanaSafety(clean)
+    expect(s.verdict).toBe('safe')
+    expect(s.flags).toEqual([])
+    expect(s.notes).toEqual([])
+    expect(s.source).toBe('goplus')
+    // SPL transfer-fee shape is unverified → taxes reported as unknown, not a wrong number.
+    expect(s.buyTaxPct).toBeNull()
+    expect(s.sellTaxPct).toBeNull()
+  })
+
+  it('keeps mutable metadata as an informational note — stays safe (JUP profile)', () => {
+    const s = normalizeSolanaSafety({
+      ...clean,
+      metadata_mutable: { metadata_upgrade_authority: [{ address: 'x' }], status: '1' },
+    })
+    expect(s.verdict).toBe('safe')
+    expect(s.flags).toEqual([])
+    expect(s.notes).toEqual(['mutable_metadata'])
+  })
+
+  it('flags a live mint authority as danger (un-revoked supply control)', () => {
+    const s = normalizeSolanaSafety({ ...clean, mintable: { authority: ['x'], status: '1' } })
+    expect(s.verdict).toBe('danger')
+    expect(s.flags).toContain('mint_authority')
+  })
+
+  it('flags a live freeze authority as danger', () => {
+    const s = normalizeSolanaSafety({ ...clean, freezable: { authority: ['x'], status: '1' } })
+    expect(s.verdict).toBe('danger')
+    expect(s.flags).toContain('freeze_authority')
+  })
+
+  it('treats a non-transferable token as a honeypot (danger)', () => {
+    expect(normalizeSolanaSafety({ ...clean, non_transferable: '1' }).verdict).toBe('danger')
+  })
+
+  it('treats Token-2022 frozen-by-default (default_account_state "2") as freeze danger', () => {
+    const s = normalizeSolanaSafety({ ...clean, default_account_state: '2' })
+    expect(s.verdict).toBe('danger')
+    expect(s.flags).toContain('freeze_authority')
+    // A normal initialized state ("1", as on WIF) must NOT trip it.
+    expect(normalizeSolanaSafety({ ...clean, default_account_state: '1' }).verdict).toBe('safe')
+  })
+
+  it('cautions on lesser owner privileges (balance-mutable or transfer hook)', () => {
+    const balMut = normalizeSolanaSafety({
+      ...clean,
+      balance_mutable_authority: { authority: ['x'], status: '1' },
+    })
+    expect(balMut.verdict).toBe('caution')
+    expect(balMut.flags).toEqual(['owner_privileges'])
+
+    const hook = normalizeSolanaSafety({ ...clean, transfer_hook: [{ address: 'x' }] })
+    expect(hook.verdict).toBe('caution')
+    expect(hook.flags).toContain('owner_privileges')
+  })
+})
+
+describe('normalizeDexSolToken', () => {
+  const MINT = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263'
+
+  it('picks the highest-liquidity solana pair and stamps network + solMint', () => {
+    const out = normalizeDexSolToken(MINT, {
+      pairs: [
+        {
+          chainId: 'ethereum', // wrong chain → ignored even at higher liquidity
+          baseToken: { address: MINT, name: 'Bonk', symbol: 'bonk' },
+          priceUsd: '0.001',
+          liquidity: { usd: 9_000_000 },
+          volume: { h24: 1 },
+        },
+        {
+          chainId: 'solana',
+          url: 'https://dexscreener.com/solana/abc',
+          baseToken: { address: MINT, name: 'Bonk', symbol: 'bonk' },
+          quoteToken: { address: 'So11111111111111111111111111111111111111112', symbol: 'SOL' },
+          priceUsd: '0.0000234',
+          priceChange: { h24: 6 },
+          liquidity: { usd: 1_500_000 },
+          volume: { h24: 800_000 },
+          marketCap: 1_700_000_000,
+          info: { imageUrl: 'http://img/bonk.png' },
+        },
+      ],
+    })
+    expect(out?.network).toBe('solana')
+    expect(out?.solMint).toBe(MINT)
+    expect(out?.coinId).toBe(MINT)
+    expect(out?.symbol).toBe('BONK')
+    expect(out?.source).toBe('dexscreener')
+    expect(out?.url).toBe('https://dexscreener.com/solana/abc')
+    expect(out?.price).toBe(0.0000234)
+    expect(out?.sparkline).toEqual([])
+  })
+
+  it('returns null below the dust-liquidity floor and for non-solana-only payloads', () => {
+    expect(
+      normalizeDexSolToken(MINT, {
+        pairs: [
+          {
+            chainId: 'solana',
+            baseToken: { address: MINT, symbol: 's' },
+            priceUsd: '1',
+            liquidity: { usd: 500 },
+          },
+        ],
+      }),
+    ).toBeNull()
+    expect(
+      normalizeDexSolToken(MINT, {
+        pairs: [
+          {
+            chainId: 'base',
+            baseToken: { address: MINT, symbol: 's' },
+            priceUsd: '1',
+            liquidity: { usd: 9_000_000 },
+          },
+        ],
+      }),
+    ).toBeNull()
+    expect(normalizeDexSolToken(MINT, { pairs: [] })).toBeNull()
+    expect(normalizeDexSolToken(MINT, null)).toBeNull()
   })
 })
 

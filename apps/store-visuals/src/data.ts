@@ -31,6 +31,38 @@ export const TOKEN: TokenSummary = {
   },
 }
 
+// v0.3 — a Solana (SPL) token card: GoPlus-Solana verdict + a Solscan link. WIF reads
+// "Safe" with a single informational `mutable_metadata` note (its mint+freeze authority are
+// revoked — the legit-Solana profile), exactly matching the live API.
+const SOL_SPARK = [
+  0.118, 0.121, 0.119, 0.124, 0.127, 0.123, 0.131, 0.129, 0.134, 0.132, 0.138, 0.136, 0.142, 0.139,
+  0.145, 0.143, 0.148, 0.146, 0.151, 0.15,
+]
+
+export const SOL_TOKEN: TokenSummary = {
+  coinId: 'dogwifcoin',
+  name: 'dogwifhat',
+  symbol: 'WIF',
+  imgUrl: '',
+  price: 0.15,
+  pCh24h: 8.2,
+  marketCap: 149_600_000,
+  volume: 44_300_000,
+  sparkline: SOL_SPARK,
+  flags: [],
+  source: 'coinstats',
+  network: 'solana',
+  solMint: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',
+  safety: {
+    verdict: 'safe',
+    buyTaxPct: null,
+    sellTaxPct: null,
+    flags: [],
+    notes: ['mutable_metadata'],
+    source: 'goplus',
+  },
+}
+
 export const WALLET: WalletSummary = {
   address: '0xce370d3e1b7e7f7d2f1d6e8b9a4c2f0e8d7c7d93',
   chain: 'base',

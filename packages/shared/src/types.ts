@@ -56,6 +56,13 @@ export type SafetyFlag =
   | 'unverified_source'
   | 'blacklist'
   | 'transfer_pausable'
+  // v0.3 — Solana (SPL) findings. On Solana the EVM intuition INVERTS: a legitimate
+  // token *revokes* its mint + freeze authority, so an un-revoked one is a real rug
+  // vector (verdict-driving), not benign-common. `mutable_metadata` is the exception —
+  // it fires on trusted tokens (e.g. JUP), so it's an informational note, like EVM `mintable`.
+  | 'mint_authority'
+  | 'freeze_authority'
+  | 'mutable_metadata'
 
 export type TokenSafety = {
   verdict: SafetyVerdict
@@ -105,6 +112,17 @@ export type TokenSummary = {
   source: TokenSource
   /** External page for the token (the DexScreener pair URL when source='dexscreener'). */
   url?: string
+  /**
+   * v0.3 — present for Solana (SPL) tokens. The discriminator the card branches on to
+   * link to a Solana explorer instead of an EVM one. `Chain` stays EVM-only (it keys
+   * every EVM-specific slug map), so Solana rides on this optional field, not the union.
+   */
+  network?: 'solana'
+  /**
+   * v0.3 — the Solana mint, for the solscan link. Carried explicitly because `coinId`
+   * may be a canonical CoinStats slug (e.g. `bonk`), not the mint, so it can't be derived.
+   */
+  solMint?: string
 }
 
 export type Holding = {
@@ -201,6 +219,13 @@ export type SymbolLookupRequest = {
   symbol: string
 }
 
+// v0.3 — Solana token (mint) path. A detected/pasted base58 mint. Resolved Worker-side via
+// `/v1/sol`; the extension pre-flights it before showing anything (base58 false positives).
+export type SolLookupRequest = {
+  type: 'SOL_LOOKUP'
+  mint: string
+}
+
 export type FearGreedRequest = {
   type: 'FEAR_GREED'
 }
@@ -209,6 +234,7 @@ export type RuntimeRequest =
   | LookupRequest
   | CoinLookupRequest
   | SymbolLookupRequest
+  | SolLookupRequest
   | FearGreedRequest
 
 // Discriminated envelope: errors surface as `{ ok: false }` rather than throwing

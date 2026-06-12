@@ -26,6 +26,10 @@ export async function symbolLookup(symbol: string): Promise<RuntimeResponse<Look
   return request<LookupResult>(`/v1/symbol?symbol=${encodeURIComponent(symbol)}`)
 }
 
+export async function solLookup(mint: string): Promise<RuntimeResponse<LookupResult>> {
+  return request<LookupResult>(`/v1/sol?mint=${encodeURIComponent(mint)}`)
+}
+
 export async function fearGreed(): Promise<RuntimeResponse<FearGreed>> {
   return request<FearGreed>('/v1/fear-greed')
 }

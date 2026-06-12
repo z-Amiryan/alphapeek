@@ -63,6 +63,12 @@ function symbolKeyOf(symbol: string): string {
   return `sym:${symbol.toUpperCase()}`
 }
 
+// v0.3 — Solana mints are keyed by the mint (base58, case-sensitive → not lowercased).
+// Prefixed like coin:/sym: so they stay out of the address-shaped recent list.
+function solKeyOf(mint: string): string {
+  return `sol:${mint}`
+}
+
 // Read + TTL-evict by key. Dropping expired entries on read keeps the cache bounded
 // and matches the privacy policy (no retention past TTL); we're about to hit the
 // network anyway, so the extra IndexedDB delete adds no perceptible latency.
@@ -119,6 +125,20 @@ export async function putCachedSymbol(symbol: string, result: LookupResult): Pro
   await (await db()).put(STORE, entry)
 }
 
+export async function getCachedSol(mint: string): Promise<LookupResult | null> {
+  return readEntry(solKeyOf(mint))
+}
+
+export async function putCachedSol(mint: string, result: LookupResult): Promise<void> {
+  const entry: CacheEntry = {
+    key: solKeyOf(mint),
+    addr: mint,
+    result,
+    ts: Date.now(),
+  }
+  await (await db()).put(STORE, entry)
+}
+
 // Newest-first; powers the popup's recent list. Ignores per-kind TTL, so prices
 // shown here may be staler than a fresh lookup.
 export async function recentLookups(limit = 5): Promise<CacheEntry[]> {
@@ -127,10 +147,12 @@ export async function recentLookups(limit = 5): Promise<CacheEntry[]> {
   const out: CacheEntry[] = []
   let cursor = await (await db()).transaction(STORE).store.index('by-ts').openCursor(null, 'prev')
   while (cursor && out.length < limit) {
-    // Coin/symbol (cashtag) entries are keyed by coinId or symbol, not an address — keep
-    // them out of the address-shaped recent list.
+    // Coin/symbol/sol (cashtag + Solana-mint) entries are keyed by coinId, symbol, or mint,
+    // not an EVM address — keep them out of the address-shaped recent list.
     const k = cursor.value.key
-    if (!k.startsWith('coin:') && !k.startsWith('sym:')) out.push(cursor.value)
+    if (!k.startsWith('coin:') && !k.startsWith('sym:') && !k.startsWith('sol:')) {
+      out.push(cursor.value)
+    }
     cursor = await cursor.continue()
   }
   return out

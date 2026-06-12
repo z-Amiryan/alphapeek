@@ -20,6 +20,19 @@ export function isAddress(text: string): boolean {
 // single-match guard (so `$100`, plain English, and stock tickers fall away).
 export const TICKER = /(?<![A-Za-z0-9$])\$([A-Za-z][A-Za-z0-9]{0,9})\b/
 
+// Solana mint: 32–44 base58 chars (the base58 alphabet excludes 0 O I l), no prefix. The
+// boundaries stop matching inside a longer base58 run. EVM addresses can't match — they're
+// `0x`-prefixed (the `x` is a base58 char → the lookbehind fails on the hex tail) and contain
+// `0` (excluded). v0.3 — detection is a CANDIDATE only; showCard pre-flights it against the
+// Worker and mounts solely on a confirmed token, so a false positive never shows a card.
+export const SOLANA_MINT =
+  /(?<![1-9A-HJ-NP-Za-km-z])[1-9A-HJ-NP-Za-km-z]{32,44}(?![1-9A-HJ-NP-Za-km-z])/
+
+export function findSolanaMint(text: string): string | null {
+  const match = new RegExp(SOLANA_MINT).exec(text)
+  return match ? match[0] : null
+}
+
 // Long-tail $symbols shorter than this are mostly slang/noise ($ME, $GM); the Worker
 // search would rarely find a single-match anyway. Whitelisted symbols bypass the floor.
 const MIN_LONG_TAIL_LENGTH = 3

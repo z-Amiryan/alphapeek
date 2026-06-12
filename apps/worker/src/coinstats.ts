@@ -158,15 +158,16 @@ function pickArray(value: unknown, ...wrapperKeys: string[]): unknown[] {
   return []
 }
 
-export async function detectTokenCoinId(
+// Resolves a contract/mint to its canonical CoinStats coinId via the `/coins` filter, or
+// null. Must be `contractAddresses` (plural): the singular form is ignored and the API
+// returns the chain's top-ranked coin, misdetecting every address as a token.
+async function detectCoinIdByContract(
   env: Env,
+  coinsSlug: string,
   addr: string,
-  chain: Chain,
 ): Promise<string | null> {
-  // Must be `contractAddresses` (plural): the singular form is ignored and the
-  // API returns the chain's top-ranked coin, misdetecting every address as a token.
   const payload = await cs(env, '/coins', {
-    blockchains: COINS_CHAIN[chain],
+    blockchains: coinsSlug,
     contractAddresses: addr,
     limit: '1',
   })
@@ -175,6 +176,21 @@ export async function detectTokenCoinId(
   if (!first) return null
   const coinId = pickString(first, 'id', 'coinId')
   return coinId.length > 0 ? coinId : null
+}
+
+export async function detectTokenCoinId(
+  env: Env,
+  addr: string,
+  chain: Chain,
+): Promise<string | null> {
+  return detectCoinIdByContract(env, COINS_CHAIN[chain], addr)
+}
+
+// v0.3 — Solana mint → canonical coinId. We must SEARCH for the id, never construct
+// `<mint>_solana`: for a canonical mega-cap that 404s (BONK's id is `bonk`, verified live),
+// whereas a long-tail coin's id genuinely is `<mint>_solana`. The search returns whichever.
+export async function detectSolanaTokenCoinId(env: Env, mint: string): Promise<string | null> {
+  return detectCoinIdByContract(env, 'solana', mint)
 }
 
 export function normalizeToken(
@@ -226,34 +242,52 @@ export async function fetchCoinDetailRaw(env: Env, coinId: string): Promise<unkn
   return cs(env, `/coins/${encodeURIComponent(coinId)}`, {})
 }
 
-// Derives the (chain, contract) to scan with GoPlus from a coin's contractAddresses —
-// the ticker path has no hovered address. Prefers the canonical singular
-// `contractAddress` deployment (verified: CAKE's single is its BSC-native entry, not the
-// ETH bridge), then ethereum, then SUPPORTED_CHAINS order. Returns null when no
-// deployment is on a supported chain (e.g. a Solana-native coin) → safety stays absent.
-export function pickSafetyTarget(detail: unknown): { chain: Chain; contract: string } | null {
+// A GoPlus scan target: an EVM (chain, contract) — scanned by the chain-id GoPlus-EVM
+// endpoint — or a Solana mint — scanned by the GoPlus-Solana endpoint (v0.3). Discriminated
+// by the presence of `network`. Shared by the address/mint paths (explicit) and the ticker
+// path ('derive').
+export type SafetyTarget = { chain: Chain; contract: string } | { network: 'solana'; mint: string }
+
+// Derives the GoPlus scan target from a coin's contractAddresses — the ticker path has no
+// hovered address. EVM is preferred (GoPlus-EVM is calibrated there and a multichain coin's
+// EVM deployment is the safer scan): prefers the canonical singular `contractAddress`
+// deployment (verified: CAKE's single is its BSC-native entry, not the ETH bridge), then
+// ethereum, then SUPPORTED_CHAINS order. Falls back to a Solana mint when the coin has NO
+// supported-EVM deployment (v0.3 — e.g. a Solana-native coin like $GOAT). Null when neither.
+export function pickSafetyTarget(detail: unknown): SafetyTarget | null {
   const rec = asRecord(detail)
   const coin = asRecord(rec?.coin) ?? asRecord(rec?.result) ?? rec
   if (!coin) return null
   const entries = Array.isArray(coin.contractAddresses) ? coin.contractAddresses : []
   const candidates: { chain: Chain; contract: string }[] = []
+  let solMint = ''
   for (const entry of entries) {
     const er = asRecord(entry)
     if (!er) continue
-    const chain = CHAIN_BY_COINS_SLUG[pickString(er, 'blockchain')]
+    const slug = pickString(er, 'blockchain')
     const contract = pickString(er, 'contractAddress')
+    const chain = CHAIN_BY_COINS_SLUG[slug]
     if (chain && contract) candidates.push({ chain, contract })
+    else if (slug === 'solana' && contract && !solMint) solMint = contract
   }
-  if (candidates.length === 0) return null
   const canonical = pickString(coin, 'contractAddress').toLowerCase()
-  return (
+  // Canonical-first across BOTH ecosystems. CoinStats sets the top-level `contractAddress`
+  // to the coin's canonical deployment (verified live: dogwifcoin's is its Solana mint). So a
+  // Solana-canonical coin scans Solana even when it ALSO has an EVM bridge — its `$cashtag`
+  // verdict then matches its mint-hover verdict, and a bridge contract's admin keys can't raise
+  // a false "Caution" on a legit Solana coin. Otherwise EVM-first (GoPlus-EVM is calibrated, and
+  // a multichain coin's EVM deployment is the safer scan), then any Solana deployment.
+  if (solMint && canonical && solMint.toLowerCase() === canonical) {
+    return { network: 'solana', mint: solMint }
+  }
+  const evm =
     candidates.find((c) => c.contract.toLowerCase() === canonical) ??
     candidates.find((c) => c.chain === 'ethereum') ??
     [...candidates].sort(
       (a, b) => SUPPORTED_CHAINS.indexOf(a.chain) - SUPPORTED_CHAINS.indexOf(b.chain),
-    )[0] ??
-    null
-  )
+    )[0]
+  if (evm) return evm
+  return solMint ? { network: 'solana', mint: solMint } : null
 }
 
 // Long-tail cashtag resolution. A $SYMBOL outside our top-1000 whitelist is genuinely
@@ -262,20 +296,26 @@ export function pickSafetyTarget(detail: unknown): { chain: Chain; contract: str
 // tool is worse than no card. So this floor + single-match guard is the precision filter.
 const MIN_SYMBOL_MARKET_CAP_USD = 50_000
 
-function hasSupportedEvmDeployment(coin: Record<string, unknown>): boolean {
+// A coin we can both show and safety-scan: a supported-EVM deployment, or (v0.3) a Solana
+// one (GoPlus-Solana scans it; solscan links it). Other chains stay out — we can't scan them.
+function hasShowableDeployment(coin: Record<string, unknown>): boolean {
   const entries = Array.isArray(coin.contractAddresses) ? coin.contractAddresses : []
   for (const entry of entries) {
     const er = asRecord(entry)
-    if (er && CHAIN_BY_COINS_SLUG[pickString(er, 'blockchain')]) return true
+    if (!er) continue
+    const slug = pickString(er, 'blockchain')
+    if (CHAIN_BY_COINS_SLUG[slug] || slug === 'solana') return true
   }
   return false
 }
 
 // Picks the single canonical coinId for a bare cashtag SYMBOL from a `/coins?symbol=`
-// payload, or null. A candidate must (a) match the symbol exactly, (b) have a deployment
-// on a supported EVM chain (so we can show + safety-scan it), and (c) clear the dust
-// floor. Resolves ONLY when exactly one candidate survives — multiple contenders (the
-// reused-ticker trap) return null so the card stays silent rather than guess wrong.
+// payload, or null. A candidate must (a) match the symbol exactly, (b) have a showable
+// deployment (supported-EVM or Solana), and (c) clear the dust floor. Resolves ONLY when
+// exactly one candidate survives — multiple contenders (the reused-ticker trap) return null
+// so the card stays silent rather than guess wrong. Note: this means a contested Solana
+// ticker with two real coins above the floor (e.g. $GOAT — Goatseus + Sonic The Goat) stays
+// silent by design; precision over coverage on the long tail (whitelisted coins are exempt).
 export function pickSymbolMatch(payload: unknown, symbol: string): string | null {
   const coins = pickArray(payload, 'result', 'coins')
   const want = symbol.toUpperCase()
@@ -285,7 +325,7 @@ export function pickSymbolMatch(payload: unknown, symbol: string): string | null
     if (!rec) continue
     if (pickString(rec, 'symbol').toUpperCase() !== want) continue
     if (pickNumber(rec, 'marketCap', 'marketCapUsd') < MIN_SYMBOL_MARKET_CAP_USD) continue
-    if (!hasSupportedEvmDeployment(rec)) continue
+    if (!hasShowableDeployment(rec)) continue
     const id = pickString(rec, 'id', 'coinId')
     if (id) matches.push(id)
     if (matches.length > 1) return null // ambiguous — bail before reading the rest

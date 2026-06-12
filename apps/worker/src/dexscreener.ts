@@ -134,3 +134,77 @@ export async function fetchDexToken(
     return null
   }
 }
+
+/**
+ * v0.3 — Solana variant of normalizeDexToken. Among pairs whose `chainId` is `solana`, picks
+ * the highest `liquidity.usd`; below MIN_LIQUIDITY_USD → null. Stamps `network:'solana'` +
+ * `solMint` so the card links to a Solana explorer. Pure + exported for unit tests.
+ */
+export function normalizeDexSolToken(mint: string, payload: unknown): TokenSummary | null {
+  const pairsRaw = asRecord(payload)?.pairs
+  if (!Array.isArray(pairsRaw)) return null
+
+  let best: Record<string, unknown> | null = null
+  let bestLiq = 0
+  for (const p of pairsRaw) {
+    const pair = asRecord(p)
+    if (!pair) continue
+    if (str(pair, 'chainId') !== 'solana') continue
+    const liq = num(asRecord(pair.liquidity)?.usd)
+    if (liq > bestLiq) {
+      bestLiq = liq
+      best = pair
+    }
+  }
+
+  if (!best || bestLiq < MIN_LIQUIDITY_USD) return null
+
+  // Prefer the side whose address is the queried mint; fall back to baseToken. Solana base58
+  // is case-sensitive, so match verbatim (no lowercasing, unlike the EVM path).
+  const base = asRecord(best.baseToken)
+  const quote = asRecord(best.quoteToken)
+  const tok = str(quote, 'address') === mint && str(base, 'address') !== mint ? quote : base
+
+  const pCh24h = num(asRecord(best.priceChange)?.h24)
+  const volume = num(asRecord(best.volume)?.h24)
+  const marketCap = num(best.marketCap) || num(best.fdv)
+
+  return {
+    coinId: mint,
+    name: str(tok, 'name'),
+    symbol: str(tok, 'symbol').toUpperCase(),
+    imgUrl: str(asRecord(best.info), 'imageUrl'),
+    price: num(best.priceUsd),
+    pCh24h,
+    marketCap,
+    volume,
+    sparkline: [],
+    flags: deriveTokenFlags(volume, pCh24h),
+    source: 'dexscreener',
+    url: str(best, 'url'),
+    network: 'solana',
+    solMint: mint,
+  }
+}
+
+/**
+ * Best-effort, zero-credit Solana token fallback (v0.3) — same contract as fetchDexToken:
+ * NEVER throws, returns null on any failure so the caller falls through to `unknown`.
+ */
+export async function fetchDexSolToken(env: Env, mint: string): Promise<TokenSummary | null> {
+  const url = `${env.DEXSCREENER_BASE_URL}/latest/dex/tokens/${encodeURIComponent(mint)}`
+  try {
+    const res = await fetch(url, {
+      headers: { accept: 'application/json' },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    })
+    if (!res.ok) {
+      console.warn(`dexscreener solana fetch failed for ${mint}: HTTP ${res.status}`)
+      return null
+    }
+    return normalizeDexSolToken(mint, (await res.json()) as unknown)
+  } catch (cause) {
+    console.warn(`dexscreener solana fetch errored for ${mint}: ${String(cause)}`)
+    return null
+  }
+}

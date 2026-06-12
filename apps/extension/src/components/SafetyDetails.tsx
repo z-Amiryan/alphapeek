@@ -15,6 +15,9 @@ const FLAG_LABELS: Record<SafetyFlag, string> = {
   unverified_source: 'Unverified source',
   blacklist: 'Blacklist function',
   transfer_pausable: 'Pausable transfers',
+  mint_authority: 'Mint authority',
+  freeze_authority: 'Freeze authority',
+  mutable_metadata: 'Mutable metadata',
 }
 
 // Show the worst few inline; summarize the rest. Hover cards are small and

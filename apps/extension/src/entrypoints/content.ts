@@ -7,8 +7,8 @@ import { type Chain, isChain } from '@alphapeek/shared'
 import { browser } from 'wxt/browser'
 import { inferChainForAddress } from '@/lib/chain'
 import { debugError } from '@/lib/debug'
-import { findAddress, findCashtag } from '@/lib/regex'
-import { requestSymbolLookup } from '@/services/messaging'
+import { findAddress, findCashtag, findSolanaMint } from '@/lib/regex'
+import { requestSolLookup, requestSymbolLookup } from '@/services/messaging'
 import { DEFAULT_CHAIN_KEY, getDefaultChain } from '@/services/settings'
 import { type CardHandle, type Target, mountCard } from '@/shadow/mount'
 import '@/shadow/styles.css'
@@ -27,7 +27,8 @@ const ACCENT_BY_THEME = { light: '#aad400', dark: '#c6f432' } as const
 function targetKey(target: Target): string {
   if (target.kind === 'address') return `a:${target.addr}`
   if (target.kind === 'coin') return `c:${target.coinId}`
-  return `s:${target.symbol}`
+  if (target.kind === 'symbol') return `s:${target.symbol}`
+  return `m:${target.mint}`
 }
 
 export default defineContentScript({
@@ -134,6 +135,17 @@ export default defineContentScript({
         anchor.classList.add(UNDERLINE_CLASS)
       }
 
+      // Solana mint: base58 detection is low-precision (other chains' addresses, CIDs, random
+      // tokens), so confirm the Worker resolves it to a real Solana token BEFORE showing
+      // anything — same trust gate as the long-tail $symbol path. The result is cached, so the
+      // card's own lookup below is an instant hit. The underline is likewise deferred.
+      if (target.kind === 'sol') {
+        const res = await requestSolLookup(target.mint)
+        if (stale()) return
+        if (!res.ok || res.data.kind !== 'token') return
+        anchor.classList.add(UNDERLINE_CLASS)
+      }
+
       // Replacing a card on the same anchor (e.g. a second match in one element):
       // tear the old one down so it can't dangle.
       if (card) {
@@ -179,9 +191,12 @@ export default defineContentScript({
         document.documentElement.style.setProperty(UNDERLINE_VAR, ACCENT_BY_THEME[detectTheme()])
         anchor.addEventListener('mouseleave', onAnchorLeave)
         // Known-resolvable targets (addresses, whitelisted cashtags) underline immediately
-        // as the discoverability cue. A long-tail $symbol underlines only once the Worker
-        // confirms a single match (in showCard), so hovering slang never flashes a cue.
-        if (target.kind !== 'symbol') anchor.classList.add(UNDERLINE_CLASS)
+        // as the discoverability cue. A long-tail $symbol AND a base58 Solana mint underline
+        // only once the Worker confirms a token (in showCard), so hovering slang or a random
+        // base58 string never flashes a cue.
+        if (target.kind !== 'symbol' && target.kind !== 'sol') {
+          anchor.classList.add(UNDERLINE_CLASS)
+        }
       }
       pendingTarget = target
 
@@ -211,6 +226,12 @@ export default defineContentScript({
             : { kind: 'symbol', symbol: hit.symbol }
         }
       }
+      // A bare base58 Solana mint has no cheap prefix to gate on, so it runs last — only once
+      // the (cheaper) 0x / $ checks miss. It's a CANDIDATE: showCard pre-flights it and shows
+      // a card only on a confirmed token, so the unavoidable false positives cost a cached
+      // probe, never a wrong card or a flashed underline.
+      const mint = findSolanaMint(text)
+      if (mint) return { kind: 'sol', mint }
       return null
     }
 

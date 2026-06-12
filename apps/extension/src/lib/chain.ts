@@ -78,3 +78,15 @@ export function dexScreenerSearchUrl(addr: string): string {
 export function coinStatsCoinUrl(coinId: string): string {
   return `https://coinstats.app/coins/${encodeURIComponent(coinId)}`
 }
+
+// Solana token (mint) page on Solscan — the Solana analogue of an EVM block explorer.
+// Solana base58 mints are case-sensitive, so the mint is passed through verbatim.
+export function solscanTokenUrl(mint: string): string {
+  return `https://solscan.io/token/${encodeURIComponent(mint)}`
+}
+
+// DexScreener's Solana token page (its `solana` chain slug). Used as the Solana DEX link
+// when there's no DexScreener pair URL to defer to.
+export function dexScreenerSolanaUrl(mint: string): string {
+  return `https://dexscreener.com/solana/${encodeURIComponent(mint)}`
+}

@@ -1,7 +1,12 @@
 // Token card (UX §3B) in the Terminal pattern: mono header, hero price + change
 // pill, stepped sparkline, split-cell stats, hairline footer links.
 import type { Chain, TokenFlag, TokenSummary } from '@alphapeek/shared'
-import { coinStatsCoinUrl, dexScreenerUrl } from '@/lib/chain'
+import {
+  coinStatsCoinUrl,
+  dexScreenerSolanaUrl,
+  dexScreenerUrl,
+  solscanTokenUrl,
+} from '@/lib/chain'
 import { formatCompact, formatPct, formatPrice } from '@/lib/format'
 import { ArrowOut } from './icons'
 import { InfoTooltip } from './InfoTooltip'
@@ -26,6 +31,8 @@ export function TokenView({ token, chain, addr }: Props) {
   const up = token.pCh24h >= 0
   // Cached payloads from before flags shipped (IndexedDB + Worker KV) may omit it.
   const flags = token.flags ?? []
+  // Solana (v0.3): the card links to a Solana explorer (solscan) instead of an EVM one.
+  const solMint = token.network === 'solana' && token.solMint ? token.solMint : null
 
   return (
     <div>
@@ -105,9 +112,13 @@ export function TokenView({ token, chain, addr }: Props) {
       <div className="flex border-t-[1.5px] border-line">
         {token.source === 'dexscreener' ? (
           // No CoinStats coin page for an unindexed token — link straight to the DexScreener
-          // pair (its authoritative chain), falling back to a chain+addr URL if absent.
+          // pair (its authoritative chain), falling back to a chain/mint URL if absent.
           <a
-            href={token.url || dexScreenerUrl(chain, addr)}
+            // `||` not `??`: normalizeDex*Token sets url to '' when absent, and an empty
+            // string must fall back to a constructed URL, not render a dead link.
+            href={
+              token.url || (solMint ? dexScreenerSolanaUrl(solMint) : dexScreenerUrl(chain, addr))
+            }
             target="_blank"
             rel="noopener noreferrer"
             className={BTN}
@@ -115,28 +126,36 @@ export function TokenView({ token, chain, addr }: Props) {
             DexScreener <ArrowOut />
           </a>
         ) : (
-          <>
-            <a
-              href={coinStatsCoinUrl(token.coinId)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={BTN}
-            >
-              CoinStats <ArrowOut />
-            </a>
-            {/* $TICKER cards have no hovered contract — show CoinStats only. */}
-            {addr ? (
-              <a
-                href={dexScreenerUrl(chain, addr)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={BTN}
-              >
-                DEX <ArrowOut />
-              </a>
-            ) : null}
-          </>
+          <a
+            href={coinStatsCoinUrl(token.coinId)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={BTN}
+          >
+            CoinStats <ArrowOut />
+          </a>
         )}
+        {/* Secondary link: Solscan for Solana tokens, else the EVM DEX for a hovered contract.
+            $TICKER cards (no hovered contract, no Solana mint) show the primary link only. */}
+        {solMint ? (
+          <a
+            href={solscanTokenUrl(solMint)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={BTN}
+          >
+            Solscan <ArrowOut />
+          </a>
+        ) : token.source !== 'dexscreener' && addr ? (
+          <a
+            href={dexScreenerUrl(chain, addr)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={BTN}
+          >
+            DEX <ArrowOut />
+          </a>
+        ) : null}
       </div>
     </div>
   )

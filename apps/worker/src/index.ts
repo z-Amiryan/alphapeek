@@ -3,7 +3,9 @@ import { DEFAULT_CHAIN, isChain } from '@alphapeek/shared'
 import { Hono } from 'hono'
 import { cached } from './cache'
 import {
+  type SafetyTarget,
   UpstreamError,
+  detectSolanaTokenCoinId,
   detectTokenCoinId,
   fetchChart,
   fetchCoinDetailRaw,
@@ -14,9 +16,9 @@ import {
   pickSafetyTarget,
   resolveSymbolToCoinId,
 } from './coinstats'
-import { fetchDexToken } from './dexscreener'
+import { fetchDexSolToken, fetchDexToken } from './dexscreener'
 import { type Env, WORKER_VERSION } from './env'
-import { fetchTokenSafety } from './goplus'
+import { fetchSolanaTokenSafety, fetchTokenSafety } from './goplus'
 import { withinDailyCap, withinIpLimit } from './ratelimit'
 
 const ADDRESS_RE = /^0x[a-f0-9]{40}$/
@@ -28,6 +30,9 @@ const COIN_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/
 // A bare cashtag SYMBOL (uppercased), letter-led. The extension only sends long-tail
 // (non-whitelisted) symbols here; validate defensively against the resolution endpoint.
 const SYMBOL_RE = /^[A-Z][A-Z0-9]{1,10}$/
+// A Solana mint (base58, 32–44 chars — case-sensitive, so NOT lowercased). The extension
+// pre-flights every base58 candidate here; validate defensively before any upstream call.
+const SOL_MINT_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/
 
 // Kind-cache sentinel for addresses that are not token contracts.
 const NOT_A_TOKEN = 'addr:'
@@ -200,12 +205,33 @@ app.get('/v1/symbol', async (c) => {
   }
 })
 
-type SafetyTarget = { chain: Chain; contract: string }
+// v0.3 — Solana token (mint) path. A base58 mint detected on X (or pasted). The extension
+// pre-flights every candidate here and mounts only on a `token` result, so a base58 false
+// positive costs a cached probe, never a wrong card. EVM-only `/v1/lookup` can't serve these
+// (a mint fails its 0x…40hex guard), hence a dedicated route + Solana-native resolution.
+app.get('/v1/sol', async (c) => {
+  const mint = c.req.query('mint') ?? ''
+  if (!SOL_MINT_RE.test(mint)) {
+    return c.json<LookupError>({ error: 'invalid_address' }, 400)
+  }
+
+  try {
+    const result = await resolveSolana(c.env, mint)
+    c.header('Cache-Control', 'public, max-age=60')
+    return c.json<LookupResult>(result)
+  } catch (err) {
+    if (err instanceof UpstreamError) {
+      return c.json<LookupError>({ error: 'upstream_error' }, 503)
+    }
+    throw err
+  }
+})
 
 // Assembles a token card from a coinId: cached raw detail (so we can also derive the
 // safety target) + parallel cached chart + cached GoPlus safety. Shared by the address
-// path (explicit target = the hovered contract+chain) and the ticker path ('derive' =
-// target read from the coin's contractAddresses). Returns null if the detail is empty.
+// path (explicit target = the hovered contract+chain), the Solana mint path (explicit
+// Solana target), and the ticker path ('derive' = target read from contractAddresses,
+// EVM-first then Solana). Returns null if the detail is empty.
 async function buildToken(
   env: Env,
   coinId: string,
@@ -217,15 +243,21 @@ async function buildToken(
   if (!detail) return null
   const token = normalizeToken(coinId, detail, [])
   const target = safety === 'derive' ? pickSafetyTarget(detail) : safety
+  const isSol = target !== null && 'network' in target
   // Chart and safety are independent, best-effort, each on its own TTL — fan out in
-  // parallel so neither stacks onto the detail latency.
+  // parallel so neither stacks onto the detail latency. The safety call routes to the
+  // GoPlus-EVM or GoPlus-Solana endpoint by the target's shape.
   const [sparkline, safetyResult] = await Promise.all([
     cached(env, `chart:${coinId}`, CHART_TTL, () => fetchChart(env, coinId)),
-    target
-      ? cached(env, `safety:${target.chain}:${target.contract}`, SAFETY_TTL, () =>
-          fetchTokenSafety(env, target.contract, target.chain),
-        )
-      : Promise.resolve(null),
+    target === null
+      ? Promise.resolve(null)
+      : isSol
+        ? cached(env, `safety:solana:${target.mint}`, SAFETY_TTL, () =>
+            fetchSolanaTokenSafety(env, target.mint),
+          )
+        : cached(env, `safety:${target.chain}:${target.contract}`, SAFETY_TTL, () =>
+            fetchTokenSafety(env, target.contract, target.chain),
+          ),
   ])
   return {
     kind: 'token',
@@ -233,6 +265,9 @@ async function buildToken(
       ...token,
       sparkline: sparkline ?? [],
       ...(safetyResult ? { safety: safetyResult } : {}),
+      // A Solana coin's coinId may be a canonical slug (`bonk`), not the mint, so carry the
+      // mint from the derived/explicit target for the card's solscan link.
+      ...(isSol ? { network: 'solana' as const, solMint: target.mint } : {}),
     },
   }
 }
@@ -282,6 +317,42 @@ async function resolve(env: Env, addr: string, chain: Chain): Promise<LookupResu
       fetchTokenSafety(env, addr, dex.chain),
     )
     return { kind: 'token', data: { ...dex.token, ...(safety ? { safety } : {}) } }
+  }
+
+  return { kind: 'unknown' }
+}
+
+// v0.3 — Solana mint resolution. Mirrors resolve()'s CoinStats-first shape: a stable
+// `solkind:` cache (canonical coinId for a month / NOT_A_TOKEN miss for hours) gates the
+// search, then CoinStats serves the card (with derived Solana safety), else the free
+// DexScreener-Solana fallback, else `unknown`. The NOT_A_TOKEN sentinel negative-caches
+// base58 false positives so detection noise doesn't re-burn the request cap.
+async function resolveSolana(env: Env, mint: string): Promise<LookupResult> {
+  const kindKey = `solkind:${mint}`
+  const hit = await env.CACHE.get(kindKey, 'json')
+  let kind = typeof hit === 'string' ? hit : null
+  if (kind === null) {
+    const coinId = await detectSolanaTokenCoinId(env, mint)
+    kind = coinId ?? NOT_A_TOKEN
+    await env.CACHE.put(kindKey, JSON.stringify(kind), {
+      expirationTtl: coinId ? KIND_TTL : NOT_A_TOKEN_TTL,
+    })
+  }
+
+  if (kind !== NOT_A_TOKEN) {
+    // Safety target is the hovered mint (explicit), so buildToken scans GoPlus-Solana directly.
+    const result = await buildToken(env, kind, { network: 'solana', mint })
+    if (result) return result
+  }
+
+  // CoinStats hasn't indexed this mint — try the free, zero-credit DexScreener-Solana
+  // fallback (fresh / unindexed pump.fun mints) before giving up.
+  const dex = await cached(env, `dex:${mint}`, DEX_TTL, () => fetchDexSolToken(env, mint))
+  if (dex) {
+    const safety = await cached(env, `safety:solana:${mint}`, SAFETY_TTL, () =>
+      fetchSolanaTokenSafety(env, mint),
+    )
+    return { kind: 'token', data: { ...dex, ...(safety ? { safety } : {}) } }
   }
 
   return { kind: 'unknown' }

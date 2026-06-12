@@ -1,12 +1,12 @@
 # Privacy Policy — AlphaPeek
 
-_Last updated: June 9, 2026._
+_Last updated: June 10, 2026._
 
-AlphaPeek is an open-source Chrome extension that shows information about EVM wallet addresses and token contracts when you hover them on supported websites. This document explains what data the extension touches and what it doesn't.
+AlphaPeek is an open-source Chrome extension that shows information about wallet addresses and token contracts — on EVM chains and Solana — when you hover them on supported websites. This document explains what data the extension touches and what it doesn't.
 
 ## What AlphaPeek collects
 
-When you hover an address that AlphaPeek recognizes on a supported site (currently X / Twitter only), the extension sends that address and a chain identifier (e.g., `ethereum`, `base`) to the AlphaPeek proxy server. The proxy then queries the CoinStats Public API to fetch token or wallet information and returns the result to your browser.
+When you hover an address (or `$cashtag`) that AlphaPeek recognizes on a supported site (currently X / Twitter only), the extension sends that address — an EVM address with a chain identifier (e.g., `ethereum`, `base`), or a Solana token mint — to the AlphaPeek proxy server. The proxy then queries the CoinStats Public API to fetch token or wallet information and returns the result to your browser.
 
 ## What AlphaPeek does NOT collect
 
@@ -29,12 +29,12 @@ The proxy does **not** log:
 
 ## Third parties
 
-When AlphaPeek looks up an address, the proxy sends that address to the [CoinStats Public API](https://coinstats.app/api-docs/) to fetch token or wallet data. For **token contracts**, the proxy also sends the contract address to the [GoPlus Token Security API](https://gopluslabs.io/) for a free, keyless contract-safety scan. If CoinStats has no data for the address, the proxy additionally sends it to the [DexScreener API](https://dexscreener.com/) — a free, keyless market-data lookup — as a coverage fallback for newer or less-indexed tokens. Each provider's own privacy policy applies to that interaction. Your browser never contacts CoinStats, GoPlus, or DexScreener directly — all requests go through the proxy.
+When AlphaPeek looks up an address, the proxy sends that address to the [CoinStats Public API](https://coinstats.app/api-docs/) to fetch token or wallet data. For **token contracts** (EVM contracts and Solana mints alike), the proxy also sends the contract/mint address to the [GoPlus Token Security API](https://gopluslabs.io/) for a free, keyless contract-safety scan. For a brand-new token still propagating to data indexes, the proxy may additionally send the address to the [DexScreener API](https://dexscreener.com/) — a free, keyless market-data lookup that covers both EVM chains and Solana — to surface the very newest tokens. Each provider's own privacy policy applies to that interaction. Your browser never contacts CoinStats, GoPlus, or DexScreener directly — all requests go through the proxy.
 
 ## Local storage on your device
 
 AlphaPeek uses two browser storage mechanisms:
-- **IndexedDB** — caches address lookup results for a short period (90 seconds for tokens, 10 minutes for wallets, 1 hour for unindexed addresses) to reduce network requests. This same cache also powers the popup's "recent lookups" list.
+- **IndexedDB** — caches address lookup results for a short period (90 seconds for tokens, 10 minutes for wallets, 1 hour for addresses with no data yet) to reduce network requests. This same cache also powers the popup's "recent lookups" list.
 - **`chrome.storage.local`** — stores your settings (your default chain).
 
 You can clear both at any time by removing the extension or via Chrome's "Clear browsing data → Cookies and site data."

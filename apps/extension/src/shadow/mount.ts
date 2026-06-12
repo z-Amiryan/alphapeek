@@ -9,12 +9,14 @@ import { type ContentScriptContext, createShadowRootUi } from 'wxt/client'
 import { HoverCard } from '@/components/HoverCard'
 
 // What the card is showing: an EVM address (with an inferred chain), a whitelisted coin
-// (a $CASHTAG resolved to a coinId), or a long-tail $symbol the Worker resolves on demand.
-// Defined here so content.ts, mount.ts, and HoverCard share one shape.
+// (a $CASHTAG resolved to a coinId), a long-tail $symbol the Worker resolves on demand, or
+// (v0.3) a Solana mint pre-flighted before showing. Defined here so content.ts, mount.ts,
+// and HoverCard share one shape.
 export type Target =
   | { kind: 'address'; addr: string; chain: Chain }
   | { kind: 'coin'; coinId: string; symbol: string }
   | { kind: 'symbol'; symbol: string }
+  | { kind: 'sol'; mint: string }
 
 export type CardOptions = {
   target: Target

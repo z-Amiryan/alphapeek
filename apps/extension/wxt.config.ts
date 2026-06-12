@@ -17,11 +17,11 @@ export default defineConfig({
     return {
       name: 'AlphaPeek',
       description:
-        'Peek any wallet or token on X (Twitter) — see balances, top holdings, price and 7-day charts instantly on hover.',
+        'Hover any wallet, token, Solana mint or $cashtag on X (Twitter) — balances, PnL, price, charts & a contract-safety check.',
       // Chrome's manifest `version` must be numeric; `version_name` carries the
-      // human-readable beta label (the v0.2 safety/PnL cut shipped; breadth deferred).
-      version: '0.2.0',
-      version_name: '0.2.0-beta',
+      // human-readable beta label (v0.3 = the Solana-token cut; Solana wallets deferred).
+      version: '0.3.0',
+      version_name: '0.3.0-beta',
       permissions: ['storage'],
       host_permissions: ['https://x.com/*', 'https://twitter.com/*'],
       action: { default_popup: 'popup.html' },

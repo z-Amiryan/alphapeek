@@ -21,7 +21,7 @@ const VERSION_LABEL = `v${MANIFEST.version_name ?? MANIFEST.version}`
 const REPO_URL = 'https://github.com/z-Amiryan/alphapeek'
 const ISSUES_URL = 'https://github.com/z-Amiryan/alphapeek/issues'
 const PRIVACY_URL = 'https://z-amiryan.github.io/alphapeek/privacy.html'
-const COINSTATS_PUBLIC_API_URL = 'https://coinstats.app/api-docs/'
+const COINSTATS_PUBLIC_API_URL = 'https://coinstats.app/api/'
 // Set once the extension is live on the Web Store and its id is known; until then the
 // "Rate it" link is hidden rather than shipped broken.
 const WEBSTORE_ID = ''

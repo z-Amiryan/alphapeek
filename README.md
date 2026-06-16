@@ -16,7 +16,7 @@
 
 ---
 
-**AlphaPeek** is an open-source Chrome extension (Manifest V3) for **X / Twitter**. It detects **EVM wallet and token addresses, Solana token mints, and `$cashtags`** in the timeline and, when you hover one, shows a compact info card — a wallet's **balance, top holdings, and allocation**, or a token's **price, market cap, volume, and 7-day chart** — without ever leaving the page. No login, no wallet connection, no setup. Crypto data is powered by the [CoinStats Public API](https://coinstats.app/api-docs/).
+**AlphaPeek** is an open-source Chrome extension (Manifest V3) for **X / Twitter**. It detects **EVM wallet and token addresses, Solana token mints, and `$cashtags`** in the timeline and, when you hover one, shows a compact info card — a wallet's **balance, top holdings, and allocation**, or a token's **price, market cap, volume, and 7-day chart** — without ever leaving the page. No login, no wallet connection, no setup. Crypto data is powered by the [CoinStats Public API](https://coinstats.app/api/).
 
 > **Why it exists:** addresses fly past on Crypto Twitter constantly, and checking each one means copy-pasting into a block explorer. AlphaPeek turns that into a hover.
 
@@ -128,4 +128,4 @@ Pre-release: the v0.1 core, the v0.2 cut (safety, PnL, coverage, cashtags), and 
 
 - **License:** MIT — see [LICENSE](LICENSE)
 - **Issues / bugs:** [GitHub Issues](https://github.com/z-Amiryan/alphapeek/issues)
-- **Data:** [CoinStats Public API](https://coinstats.app/api-docs/)
+- **Data:** [CoinStats Public API](https://coinstats.app/api/)

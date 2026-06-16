@@ -29,7 +29,7 @@ The proxy does **not** log:
 
 ## Third parties
 
-When AlphaPeek looks up an address, the proxy sends that address to the [CoinStats Public API](https://coinstats.app/api-docs/) to fetch token or wallet data. For **token contracts** (EVM contracts and Solana mints alike), the proxy also sends the contract/mint address to the [GoPlus Token Security API](https://gopluslabs.io/) for a free, keyless contract-safety scan. For a brand-new token still propagating to data indexes, the proxy may additionally send the address to the [DexScreener API](https://dexscreener.com/) — a free, keyless market-data lookup that covers both EVM chains and Solana — to surface the very newest tokens. Each provider's own privacy policy applies to that interaction. Your browser never contacts CoinStats, GoPlus, or DexScreener directly — all requests go through the proxy.
+When AlphaPeek looks up an address, the proxy sends that address to the [CoinStats Public API](https://coinstats.app/api/) to fetch token or wallet data. For **token contracts** (EVM contracts and Solana mints alike), the proxy also sends the contract/mint address to the [GoPlus Token Security API](https://gopluslabs.io/) for a free, keyless contract-safety scan. For a brand-new token still propagating to data indexes, the proxy may additionally send the address to the [DexScreener API](https://dexscreener.com/) — a free, keyless market-data lookup that covers both EVM chains and Solana — to surface the very newest tokens. Each provider's own privacy policy applies to that interaction. Your browser never contacts CoinStats, GoPlus, or DexScreener directly — all requests go through the proxy.
 
 ## Local storage on your device
 

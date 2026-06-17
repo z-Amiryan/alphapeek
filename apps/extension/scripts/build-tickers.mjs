@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const OUT_FILE = join(__dirname, '..', 'src', 'lib', 'tickers.generated.ts')
 
-const BASE_URL = process.env.COINSTATS_BASE_URL ?? 'https://openapiv1.coinstats.app'
+const BASE_URL = process.env.COINSTATS_BASE_URL ?? 'https://api.coinstats.app'
 const API_KEY = process.env.COINSTATS_API_KEY
 if (!API_KEY) {
   console.error(

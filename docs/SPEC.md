@@ -37,7 +37,7 @@
                                    │ HTTPS GET + X-API-KEY
                                    ▼
                        CoinStats Public API
-                   (openapiv1.coinstats.app)
+                   (api.coinstats.app)
 ```
 
 ## 2. Repo structure (exact)
